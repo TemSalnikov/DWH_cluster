@@ -2,7 +2,7 @@ import json
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from airflow.utils.log.logging_mixin import LoggingMixin
-from extract_from_xl import transform_xl_to_json
+from extract_from_custom_366 import transform_xl_to_json
 import asyncio
 import pandas as pd
 import math
