@@ -2,7 +2,7 @@ import json
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from airflow.utils.log.logging_mixin import LoggingMixin
-from extract_from_custom_366 import transform_xl_to_json
+from extract_from_remain_366 import transform_xl_to_json
 import asyncio
 import pandas as pd
 import math
@@ -94,19 +94,14 @@ async def call_async_producer():
     loger = LoggingMixin().log
     bootstrap_servers = ['192.168.14.235:9091', '192.168.14.235:9092', '192.168.14.235:9093']
     prefix_topic = 'fpc_366'
-    data_full = transform_xl_to_json(path='/home/ubuntu/Загрузки/отчеты/36,6/закуп/2024/12_2024.xlsx', 
-                                  sheet_name = 'Sheet1', 
-                                  name_report = 'Закупки', 
+    data_full = transform_xl_to_json(path='/home/ubuntu/Загрузки/отчеты/36,6/продажи/2024/12_2024.xlsx', 
+                                  sheet_name = 'на подпись', 
+                                  name_report = 'Продажи', 
                                   name_pharm_chain = '36.6')
     producer = create_producer(bootstrap_servers, max_request_size = 10485760)
-    # task_drugstor = asyncio.create_task(background_sender(producer,data_full, prefix_topic,  'table_drugstor' ))
-    # task_suplier = asyncio.create_task(background_sender(producer, data_full, prefix_topic,  'table_suplier' ))
-    # task_product = asyncio.create_task(background_sender(producer, data_full, prefix_topic,  'table_product' ))
-    # task_report = asyncio.create_task(background_sender(producer, data_full, prefix_topic,  'table_report' ))
 
-    # await asyncio.gather(task_drugstor, task_suplier, task_product, task_report)
-    send_dataframe(producer, topic = prefix_topic+'_'+'table_drugstor', df = data_full['table_drugstor'])
-    send_dataframe(producer, topic = prefix_topic+'_'+'table_suplier', df = data_full['table_suplier'])
+
+    # send_dataframe(producer, topic = prefix_topic+'_'+'table_drugstor', df = data_full['table_drugstor'])
     send_dataframe(producer, topic = prefix_topic+'_'+'table_product', df = data_full['table_product'])
     send_dataframe(producer, topic = prefix_topic+'_'+'table_report', df = data_full['table_report'])
     loger.info(f'Загрузка всех данных успешно завершена!')

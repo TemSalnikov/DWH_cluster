@@ -12,7 +12,7 @@ def create_text_hash(row, columns):
     # Создаем хеш SHA256 и преобразуем в hex-строку
     return hashlib.sha256(combined.encode()).hexdigest()
 
-def transform_xl_to_json (path = '',sheet_name = 'Sheet1' , name_report = 'custom', name_pharm_chain = '36,6') -> dict:
+def transform_xl_to_json (path = '',sheet_name = 'Sheet1' , name_report = 'Закупки', name_pharm_chain = '36,6') -> dict:
     loger = LoggingMixin().log
     try:
         df = pd.read_excel(path , sheet_name)
@@ -26,8 +26,9 @@ def transform_xl_to_json (path = '',sheet_name = 'Sheet1' , name_report = 'custo
         # df_product['uuid_product'] = [str(uuid.uuid4()) for x in range(len(df_product))]
 
         df_drugstore['hash_drugstore'] = df_drugstore.apply(create_text_hash, columns = ['Бренд аптеки', 'ЮЛ аптеки', 'ИНН аптеки', 'Адрес аптеки'], axis=1)
+        df_drugstore['hash_drugstore_addr'] = df_drugstore.apply(create_text_hash, columns = ['Адрес аптеки'], axis=1)
         df_supplier['hash_supplier'] = df_supplier.apply(create_text_hash, columns = ['Поставщик', 'ИНН поставщика'], axis=1)
-        df_product['hash_product'] = df_product.apply(create_text_hash, columns = ['SKU Наименование', 'SKU ID', 'Производитель'], axis=1)
+        df_product['hash_product'] = df_product.apply(create_text_hash, columns = ['SKU Наименование', 'SKU ID'], axis=1)
 
         df['uuid_report'] = [str(uuid.uuid4()) for x in range(len(df))]
         # df['name_report'] = [name_report for x in range(len(df))]
@@ -36,7 +37,7 @@ def transform_xl_to_json (path = '',sheet_name = 'Sheet1' , name_report = 'custo
         df = df.merge(df_drugstore, on = ['Бренд аптеки', 'ЮЛ аптеки', 'ИНН аптеки', 'ID аптеки', 'Адрес аптеки'], how = 'left')
         df = df.merge(df_supplier, on = ['Поставщик', 'ИНН поставщика'], how = 'left')
         df = df.merge(df_product, on = ['SKU Наименование', 'SKU ID', 'Производитель'], how = 'left')
-        df_report = df[['uuid_report', 'Период', 'Количество, уп','Сумма ЗЦ, руб. без НДС', 'hash_drugstore', 'hash_supplier', 'hash_product']]
+        df_report = df[['uuid_report', 'Период', 'Количество, уп','Сумма ЗЦ, руб. без НДС', 'hash_drugstore', 'hash_drugstore_addr', 'hash_supplier', 'hash_product']]
         df_report.rename(columns = {'Период':'period', 'Количество, уп':'quantity',
         'Сумма ЗЦ, руб. без НДС':'total_cost'}, inplace=True)
         df_report['name_report'] = [name_report for x in range(len(df))]
