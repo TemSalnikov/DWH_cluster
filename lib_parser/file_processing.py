@@ -90,3 +90,102 @@ def check_new_files(files_list, meta_files_list):
     loger.info(f'Список необработанных файлов: {result}')
     
     return result
+
+def _write_meta_directory(db_config, directory):
+    loger = LoggingMixin().log
+    conn = None
+    query_check = f"""select name_dir from files.directories d 
+                       where d.name_dir = '{directory}'"""
+    query_insert = f"""insert into files.directories
+                        (name_dir) values '{directory}'"""
+    query_get_id_dir = f"""select id_dir from files.directories d 
+                       where d.name_dir = '{directory}'"""
+    try:
+        conn = psycopg2.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(query_check)
+        check = cursor.fetchall()
+        if check:
+            loger.info(f'Директория {directory} была записана ранее')
+        else:
+            cursor.execute(query_insert)
+            answer = cursor.fetchall()
+            loger.info(f'Выполнена запись директории с резуьтатом: {answer}')
+        cursor.execute(query_get_id_dir)
+        result = int(cursor.fetchall(), 32)
+        return result
+    except Exception as e:
+        loger.error(f"Ошибка при работе с PostgreSQL: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def _write_meta_folder(db_config, directory, folder):
+    id_dir = _write_meta_directory(db_config, directory)
+    loger = LoggingMixin().log
+    conn = None
+    query_check = f"""select name_folder from files.folders c 
+                join files.directories d on c.id_dir = d.id_dir and d.name_dir = '{directory}'
+                and c.name_folder = '{folder}'""" 
+    query_insert = f"""insert into files.folders
+                        (name_folder, id_dir) values '{folder}', {id_dir}"""
+    query_get_id_folder = f"""select id_folder from files.folders c 
+                join files.directories d on c.id_dir = d.id_dir and d.name_dir = '{directory}'
+                and c.name_folder = '{folder}'""" 
+    try:
+        conn = psycopg2.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(query_check)
+        check = cursor.fetchall()
+        if check:
+            loger.info(f'Папка {folder} была записана ранее')
+        else:
+            cursor.execute(query_insert)
+            answer = cursor.fetchall()
+            loger.info(f'Выполнена запись папки с резуьтатом: {answer}')
+        cursor.execute(query_get_id_folder)
+        result = int(cursor.fetchall(), 32)
+        return result
+    except Exception as e:
+        loger.error(f"Ошибка при работе с PostgreSQL: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def write_meta_file(db_config, directory, folder, file):
+    id_folder = _write_meta_folder(db_config, directory, folder)
+    loger = LoggingMixin().log
+    conn = None
+    query_check = f"""select name_file  from files.files f 
+                        join files.folders c on f.id_folder = c.id_folder and c.name_folder = '{folder}'
+                        join files.directories d on c.id_dir = d.id_dir and d.name_dir = '{directory}' 
+                        and f.name_file = '{file}'"""
+    query_insert = f"""insert into files.files
+                        (name_file, id_folder) values '{folder}', {id_folder}"""
+    query_get_id_file = f"""select id_file  from files.files f 
+                        join files.folders c on f.id_folder = c.id_folder and c.name_folder = '{folder}'
+                        join files.directories d on c.id_dir = d.id_dir and d.name_dir = '{directory}' 
+                        and f.name_file = '{file}'""" 
+    try:
+        conn = psycopg2.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute(query_check)
+        check = cursor.fetchall()
+        if check:
+            loger.info(f'Файл {file} был записан ранее')
+        else:
+            cursor.execute(query_insert)
+            answer = cursor.fetchall()
+            loger.info(f'Выполнена запись файла с резуьтатом: {answer}')
+        cursor.execute(query_get_id_file)
+        result = int(cursor.fetchall(), 32)
+        return result
+    except Exception as e:
+        loger.error(f"Ошибка при работе с PostgreSQL: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
