@@ -20,7 +20,7 @@ default_args = {
 }
 
 @dag(
-    dag_id='cf_xls_kafka_mart_fpc_366_report',
+    dag_id='cf_xls_kafka_mart_fpc_366_custom',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
@@ -34,7 +34,7 @@ default_args = {
             },
     tags=['advanced']
 )
-def cf_xls_kafka_mart_fpc_366_report():
+def cf_xls_kafka_mart_fpc_366_custom():
     @task
     def check_data_availability() -> bool:
         # Проверяет готовность данных (пример реализации).
@@ -111,22 +111,36 @@ def cf_xls_kafka_mart_fpc_366_report():
         return files
     
     @task
-    def trigger_or_skip(parametrs: Optional[Dict], processing_files: Optional[Dict]):
-        """
-        Запускает целевой DAG если параметры есть, иначе пропускает.
-        """
+    def trigger_or_skip(parametrs: Optional[Dict], processing_files: Optional[Dict], **context):
+        # if processing_files:
+        #     parametrs['files'] = processing_files
+            # TriggerDagRunOperator(
+            #     task_id='trigger_target_dag',
+            #     trigger_dag_id="wf_xls_kafka_mart_fpc_366_custom",
+            #     conf=parametrs,
+            #     wait_for_completion=False,
+            #     trigger_rule='all_success',
+            #     execution_date=datetime(2025, 1, 1)
+            # )
+            
+        # else:
+        #     raise AirflowSkipException("Условия не выполнены, пропускаем запуск целевого DAG")
+
+        from airflow.api.common.trigger_dag import trigger_dag
         if processing_files:
             parametrs['files'] = processing_files
-            TriggerDagRunOperator(
-                task_id='trigger_target_dag',
-                trigger_dag_id="wf_xls_kafka_mart_fpc_366_report",
-                conf=parametrs,
-                wait_for_completion=False,
-                trigger_rule='all_success'
-                # execution_date=datetime.now().isoformat(' ', 'date')
+            result = trigger_dag(
+                dag_id='wf_xls_kafka_mart_fpc_366_custom',
+                run_id=f"triggered_by_{context['dag_run'].run_id}",
+                conf={"xls_kafka_mart_fpc_366_custom":parametrs},
+                execution_date=None,
+                replace_microseconds=False
             )
+            if not result:
+                raise RuntimeError("Не удалось запустить дочерний DAG")
         else:
             raise AirflowSkipException("Условия не выполнены, пропускаем запуск целевого DAG")
+
 
     start_flow = check_data_availability()
     parametrs = prepare_parameters(start_flow)
@@ -138,4 +152,4 @@ def cf_xls_kafka_mart_fpc_366_report():
     processing_files = get_files_for_processing(processinf_folders, meta_files, files)
     trigger_or_skip(parametrs, processing_files)
 
-cf_xls_kafka_mart_fpc_366_report()
+cf_xls_kafka_mart_fpc_366_custom()

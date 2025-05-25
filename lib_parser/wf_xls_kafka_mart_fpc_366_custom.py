@@ -25,14 +25,14 @@ default_args = {
 }
 
 @dag(
-    dag_id='wf_xls_kafka_mart_fpc_366_report',
+    dag_id='wf_xls_kafka_mart_fpc_366_custom',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
     tags=['advanced']
 )
 
-def wf_xls_kafka_mart_fpc_366_report():
+def wf_xls_kafka_mart_fpc_366_custom():
 
     @task
     def check_data_availability() -> bool:
@@ -55,12 +55,12 @@ def wf_xls_kafka_mart_fpc_366_report():
             return parametrs
         else: raise
     @task
-    def extract_from_xls(conf:dict):
+    def extract_from_xls(configs:dict):
         # pass
-        for folder, files in conf['files']:
+        for folder, files in configs['xls_kafka_mart_fpc_366_custom']['files'].items():
             for file in files:
-                if call_producer_custom(conf['directory']+'/'+folder+'/'+file):
-                    write_meta_file(conf['db_config'], conf['directory'],folder,file)
+                if call_producer_custom(configs['xls_kafka_mart_fpc_366_custom']['directory']+'/'+folder+'/'+file):
+                    write_meta_file(configs['xls_kafka_mart_fpc_366_custom']['db_config'], configs['xls_kafka_mart_fpc_366_custom']['directory'],folder,file)
     # def extract_from_remain(conf:dict):
     #     call_producer_remain(conf['directory'])
     # def extract_from_sale(conf:dict):
@@ -76,4 +76,4 @@ def wf_xls_kafka_mart_fpc_366_report():
     # extract_from_remain('{{ dag_run.conf }}')
     # extract_from_sale('{{ dag_run.conf }}')
 
-wf_xls_kafka_mart_fpc_366_report()
+wf_xls_kafka_mart_fpc_366_custom()

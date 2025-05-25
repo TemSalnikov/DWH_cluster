@@ -39,12 +39,12 @@ def _estimate_size(df: pd.DataFrame) -> int:
         estimated_size = sample_size * (len(df) / 10)
         return estimated_size
 
-def _split_dataframe(df: pd.DataFrame, chunk_size: int) -> list[pd.DataFrame]:
+def _split_dataframe(df: pd.DataFrame, chunk_size: int) -> list:
         # """Разделяет датафрейм на части по количеству строк"""
         num_chunks = math.ceil(len(df) / chunk_size)
         return [df[i*chunk_size:(i+1)*chunk_size] for i in range(num_chunks)]
     
-def send_dataframe(producer, topic, df: pd.DataFrame, metadata: dict[str, any] = None, max_message_size = 1048576) -> None:
+def send_dataframe(producer, topic, df, metadata, max_message_size = 1048576):
     # """
     # Отправляет датафрейм в Kafka, при необходимости разбивая на части
     
@@ -107,6 +107,21 @@ async def call_async_producer():
     loger.info(f'Загрузка всех данных успешно завершена!')
     producer.close()
 
+def call_producer(path):
+    loger = LoggingMixin().log
+    bootstrap_servers = ['kafka1:9091', 'kafak2:9092', 'kafka3:9093']
+    prefix_topic = 'fpc_366'
+    data_full = transform_xl_to_json(path, sheet_name = 'на подпись', 
+                                  name_report = 'Продажи', 
+                                  name_pharm_chain = '36.6')
+    producer = create_producer(bootstrap_servers, max_request_size = 10485760)
+
+
+    # send_dataframe(producer, topic = prefix_topic+'_'+'table_drugstor', df = data_full['table_drugstor'])
+    send_dataframe(producer, topic = prefix_topic+'_'+'table_product', df = data_full['table_product'])
+    send_dataframe(producer, topic = prefix_topic+'_'+'table_report', df = data_full['table_report'])
+    loger.info(f'Загрузка всех данных успешно завершена!')
+    producer.close()
 
 
 if __name__ == "__main__":
