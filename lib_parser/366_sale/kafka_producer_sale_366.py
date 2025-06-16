@@ -2,7 +2,7 @@ import json
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 from airflow.utils.log.logging_mixin import LoggingMixin
-from extract_from_remain_366 import transform_xl_to_json
+from extract_from_sale_366 import transform_xl_to_json
 import asyncio
 import pandas as pd
 import math
@@ -44,7 +44,7 @@ def _split_dataframe(df: pd.DataFrame, chunk_size: int) -> list:
         num_chunks = math.ceil(len(df) / chunk_size)
         return [df[i*chunk_size:(i+1)*chunk_size] for i in range(num_chunks)]
     
-def send_dataframe(producer, topic, df, metadata, max_message_size = 1048576):
+def send_dataframe(producer, topic, df, max_message_size = 1048576):
     # """
     # Отправляет датафрейм в Kafka, при необходимости разбивая на части
     
@@ -53,8 +53,8 @@ def send_dataframe(producer, topic, df, metadata, max_message_size = 1048576):
     # """
     loger = LoggingMixin().log
     
-    if metadata is None:
-        metadata = {}
+    # if metadata is None:
+    #     metadata = {}
     
     # Оцениваем размер датафрейма
     estimated_size = _estimate_size(df)
@@ -95,7 +95,7 @@ async def call_async_producer():
     bootstrap_servers = ['192.168.14.235:9091', '192.168.14.235:9092', '192.168.14.235:9093']
     prefix_topic = 'fpc_366'
     data_full = transform_xl_to_json(path='/home/ubuntu/Загрузки/отчеты/36,6/продажи/2024/12_2024.xlsx', 
-                                  sheet_name = 'на подпись', 
+                                  sheet_name = 'Sheet1', 
                                   name_report = 'Продажи', 
                                   name_pharm_chain = '36.6')
     producer = create_producer(bootstrap_servers, max_request_size = 10485760)
@@ -111,7 +111,7 @@ def call_producer(path):
     loger = LoggingMixin().log
     bootstrap_servers = ['kafka1:9091', 'kafak2:9092', 'kafka3:9093']
     prefix_topic = 'fpc_366'
-    data_full = transform_xl_to_json(path, sheet_name = 'на подпись', 
+    data_full = transform_xl_to_json(path, sheet_name = 'Sheet1', 
                                   name_report = 'Продажи', 
                                   name_pharm_chain = '36.6')
     producer = create_producer(bootstrap_servers, max_request_size = 10485760)

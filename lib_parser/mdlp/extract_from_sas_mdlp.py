@@ -10,7 +10,7 @@ def connect():
     password = "5nrNv_Z29r"
 
     # URL endpoint (обычно это /msmdpump.dll или /olap/msmdpump.dll)
-    endpoint = f"https://{server}/olap/msmdpump.dll"
+    endpoint = f"https://{server}"
 
     # SOAP-запрос для выполнения DAX
     soap_request = f"""<?xml version="1.0" encoding="utf-8"?>

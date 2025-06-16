@@ -44,7 +44,7 @@ def _split_dataframe(df: pd.DataFrame, chunk_size: int) -> list:
         num_chunks = math.ceil(len(df) / chunk_size)
         return [df[i*chunk_size:(i+1)*chunk_size] for i in range(num_chunks)]
     
-def send_dataframe(producer, topic, df, metadata, max_message_size = 1048576):
+def send_dataframe(producer, topic, df, max_message_size = 1048576):
     # """
     # Отправляет датафрейм в Kafka, при необходимости разбивая на части
     
@@ -53,8 +53,8 @@ def send_dataframe(producer, topic, df, metadata, max_message_size = 1048576):
     # """
     loger = LoggingMixin().log
     
-    if metadata is None:
-        metadata = {}
+    # if metadata is None:
+    #     metadata = {}
     
     # Оцениваем размер датафрейма
     estimated_size = _estimate_size(df)
