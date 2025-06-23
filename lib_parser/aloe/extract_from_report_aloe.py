@@ -27,7 +27,7 @@ def extract_data(path = '', sheet_name = '', name_pharm_chain = ''):
         raise
     return df
 
-def table_conversion(df: pd.DataFrame,  name_sheet = ''):
+def table_conversion(df: pd.DataFrame):
     # Удаление пустых строк и строк с метаданными
     df = df.dropna(how='all').reset_index(drop=True)
 
@@ -46,19 +46,19 @@ def table_conversion(df: pd.DataFrame,  name_sheet = ''):
 
     start_row = df[df.iloc[:, 0] == 'Номенклатура'].index[0]
 
-    apotheka_addresses = df.iloc[start_row, 1:].tolist()  # Берем все столбцы, кроме первого
+    apteka_addresses = df.iloc[start_row, 1:].tolist()  # Берем все столбцы, кроме первого
 
     # Данные начинаются со строки start_row + 2
     data = df.iloc[start_row + 2:, :].copy()
-    data.columns = ['Номенклатура'] + apotheka_addresses  # Устанавливаем правильные заголовки
+    data.columns = ['Номенклатура'] + apteka_addresses  # Устанавливаем правильные заголовки
 
     # Преобразуем таблицу: каждая аптека становится отдельной строкой
     result = pd.DataFrame(columns=['Номенклатура', 'Количество', 'Аптека'])
 
-    for apotheka in apotheka_addresses:
-        temp_df = data[['Номенклатура', apotheka]].copy()
+    for apteka in apteka_addresses:
+        temp_df = data[['Номенклатура', apteka]].copy()
         temp_df.columns = ['Номенклатура', 'Количество']
-        temp_df['Аптека'] = apotheka
+        temp_df['Аптека'] = apteka
         result = pd.concat([result, temp_df], ignore_index=True)
 
     # Удаляем строки, где количество NaN или 0
@@ -66,8 +66,8 @@ def table_conversion(df: pd.DataFrame,  name_sheet = ''):
     result['Количество'] = pd.to_numeric(result['Количество'], errors='coerce')
     result = result.dropna(subset=['Количество'])
 
-    result['from'] = [str(start_date) for x in range(len(result))]
-    result['to'] = [str(end_date) for x in range(len(result))]
+    result['start_date'] = [str(start_date) for x in range(len(result))]
+    result['end_date'] = [str(end_date) for x in range(len(result))]
 
     # Сбрасываем индексы и выводим результат
     result = result.reset_index(drop=True)
@@ -77,10 +77,13 @@ def table_conversion(df: pd.DataFrame,  name_sheet = ''):
 def transform_xl_to_json (path = '',sheet_name = 'Sheet1' , name_report = 'Закуп_Продажи_Остатки', name_pharm_chain = 'Алоэ') -> dict:
     loger = LoggingMixin().log
     try:
-        excel_file = pd.ExcelFile(path)
-        shets_list = excel_file.sheet_names
-        
-        df = extract_data(path , sheet_name, name_pharm_chain)
+        xls = pd.ExcelFile(path)
+        sheet_names = xls.sheet_names
+        df = pd.read_excel(path , sheet_names[0])
+        df = df.astype(str)
+        loger.info(f'Успешно получено {df[df.columns[0]].count()} строк!')
+
+
         
         df_drugstore = df[['Бренд аптеки', 'ЮЛ аптеки', 'ИНН аптеки', 'ID аптеки', 'Адрес аптеки']].drop_duplicates()
         df_supplier = df[['Поставщик', 'ИНН поставщика']].drop_duplicates()
@@ -143,5 +146,6 @@ def transform_xl_to_json (path = '',sheet_name = 'Sheet1' , name_report = 'За�
 if __name__ == "__main__":
     # transform_xl_to_json(path='/home/ubuntu/Загрузки/отчеты/36,6/закуп/2024/12_2024.xlsx')
     df = extract_data(path='/home/ubuntu/Загрузки/отчеты/Алоэ/Закуп_Продажи_Остатки/2025/01_2025.xlsx', sheet_name = 'продажи')
-    table_conversion(df, 'продажи')
+    result = table_conversion(df)
+    print(result)
     
