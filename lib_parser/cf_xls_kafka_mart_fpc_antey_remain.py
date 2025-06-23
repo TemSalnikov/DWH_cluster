@@ -3,6 +3,7 @@ from airflow.decorators import dag, task
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.models.param import Param
 from airflow.exceptions import AirflowSkipException
+from airflow.utils.log.logging_mixin import LoggingMixin
 from typing import Optional, Dict
 import os
 import sys
@@ -120,14 +121,18 @@ def cf_xls_kafka_mart_fpc_antey_remain():
 
     @task
     def trigger_or_skip(parametrs: Optional[Dict], processing_files: Optional[Dict], **context):
-
+        loger = LoggingMixin().log
+        loger.info(f'Полученный контекст: {context}!')
         from airflow.api.common.trigger_dag import trigger_dag
         if processing_files:
             parametrs['files'] = processing_files
+            _dag_id = context["dag"] if "dag" in context else ''
+            _dag_id = str(_dag_id).split(':')[1].strip().strip('>')
+            loger.info(f'Успешно получено dag_id {_dag_id}!')
             result = trigger_dag(
-                dag_id='wf'+context['dag_id'][2:],
+                dag_id='wf'+ _dag_id[2:],
                 run_id=f"triggered_by_{context['dag_run'].run_id}",
-                conf={context['dag_id'][3:]:parametrs},
+                conf={_dag_id[3:]:parametrs},
                 execution_date=None,
                 replace_microseconds=False
             )

@@ -1,6 +1,4 @@
 from datetime import datetime, timedelta
-# import openpyxl as pyxl
-import json
 import uuid
 import pandas as pd
 from airflow.utils.log.logging_mixin import LoggingMixin
@@ -23,31 +21,35 @@ def extract_xls (path = '', name_report = 'Остатки+Закуп+Прода�
 
         param_row = df[df.iloc[:,0] == 'Параметры:'].index[0]
         # report_date = df.iloc[0,1]
-        period = df.iloc[param_row,1].split(':')[1].strip()
+        period = df.iloc[param_row,2].split(':')[1].strip()
         start_date, end_date = period.split(' - ')
-        start_date = (start_date, "%Y-%m-%d")
-        end_date = (end_date, "%Y-%m-%d")
+        start_date = datetime.strptime(start_date, "%d.%m.%Y")
+        end_date = datetime.strptime(end_date, "%d.%m.%Y")
         if start_date == end_date:
             end_date= end_date + timedelta(days = 1)
 
-        df = dropna(how = 'all').reset_index(drop = True)
+        df = df.dropna(how = 'all').reset_index(drop = True)
         start_row = df[df.iloc[:,0] == 'Склад'].index[0]
         headers = df.iloc[start_row].values
-        df = df.iloc[start_row + 3] .copy()
+
         df.columns = headers
+        df = df.drop(df.index[:start_row + 3])
+        df = df.reset_index(drop=True)
+        
 
 
         df['uuid_report'] = [str(uuid.uuid4()) for x in range(len(df))]
-        # df['hash_drugstore'] = df.apply(create_text_hash, columns = ['Организация', 'ИНН', 'Склад'], axis=1)
+        
+        
         df.rename(columns = {'Склад':'product', 'Нач. остаток, шт.':'start_quantity', 'Приход, шт.':'received_quantity', 'Расход, шт.':'sale_quantity', 'Кон. остаток, шт.':'end_quantity'}, inplace=True)
-        # df_drugstore = df[['hash_drugstore','drugstore', 'inn', 'address']].drop_duplicates()
+       
         df_report = df[['uuid_report', 'product', 'start_quantity', 'received_quantity', 'sale_quantity', 'end_quantity']]
         df_report['name_report'] = [name_report for x in range(len(df))]
         df_report['name_pharm_chain'] = [name_pharm_chain for x in range(len(df))]
-        # df_report['report_date'] = [report_date for x in range(len(df))]
-        df_report['start_date'] = [start_date for x in range(len(df))]
-        df_report['end_date'] = [end_date for x in range(len(df))]
-        df_report['processed_dttm'] = [str(datetime.datetime.now()) for x in range(len(df))]
+       
+        df_report['start_date'] = [str(start_date) for x in range(len(df))]
+        df_report['end_date'] = [str(end_date) for x in range(len(df))]
+        df_report['processed_dttm'] = [str(datetime.now()) for x in range(len(df))]
         return {
             'table_report':     df_report
             }
@@ -72,4 +74,4 @@ def extract_xls (path = '', name_report = 'Остатки+Закуп+Прода�
 
 
 if __name__ == "__main__":
-    transform_xl_to_json(path='/home/ubuntu/Загрузки/отчеты/36,6/закуп/2024/12_2024.xlsx')
+    extract_xls(path='/home/ubuntu/Загрузки/отчеты/Аптека 25/Остатки+Закуп+Продажи/2024/02_2024.xls')

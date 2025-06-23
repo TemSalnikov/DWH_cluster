@@ -89,6 +89,7 @@ def call_producer(transform_xl_to_json, path, name_report, name_pharm_chain, pre
         data_full = transform_xl_to_json(path,
                                     name_report,
                                     name_pharm_chain)
+        loger.info(f'Прочитаны данные {data_full}')
         producer = create_producer(bootstrap_servers, max_request_size = 10485760)
         if 'table_drugstor' in data_full:
             send_dataframe(producer, topic = prefix_topic+'_'+'table_drugstor', df = data_full['table_drugstor'])

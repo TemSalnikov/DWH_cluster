@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 # import openpyxl as pyxl
 # import json
 import uuid
-# import pandas as pd
-# from airflow.utils.log.logging_mixin import LoggingMixin
+import pandas as pd
+from airflow.utils.log.logging_mixin import LoggingMixin
 import hashlib
 
 def create_text_hash(row, columns):
@@ -21,21 +21,22 @@ def extract_custom (path = '', name_report = 'Закупки', name_pharm_chain 
         df = df.astype(str)
         loger.info(f'Успешно получено {df[df.columns[0]].count()} строк!')
 
-        report_date = df.iloc[0,1]
-        period = df.iloc[1,1]
+        report_date = df.columns[1]
+        period = df.iloc[0,1]
         start_date, end_date = period.split(' - ')
-        start_date = (start_date, "%Y-%m-%d")
-        end_date = (end_date, "%Y-%m-%d")
+        start_date = datetime.strptime(start_date, "%d.%m.%Y")
+        end_date = datetime.strptime(end_date, "%d.%m.%Y")
         if start_date == end_date:
             end_date= end_date + timedelta(days = 1)
-        df = dropna(how = 'all').reset_index(drop = True)
+        df = df.dropna(how = 'all').reset_index(drop = True)
         start_row = df[df.iloc[:,0] == 'Организация'].index[0]
         headers = df.iloc[start_row].values
-        df = df.iloc[start_row + 1] .copy()
+
         df.columns = headers
+        df = df.drop(df.index[:start_row + 3])
+        df = df.reset_index(drop=True)
 
-        #нужно добавить удаление пустых строк
-
+       
         df['uuid_report'] = [str(uuid.uuid4()) for x in range(len(df))]
         df['hash_drugstore'] = df.apply(create_text_hash, columns = ['Организация', 'ИНН', 'Склад'], axis=1)
         df.rename(columns = {'Организация': 'drugstore', 'ИНН':'inn', 'Склад':'address', 'Товар':'product', 'Поставщик':'supplier', 'КолПрих':'quantity', 'ЦенаРасчет':'price', 'СумРасчетПрих':'total_cost'}, inplace=True)
@@ -44,9 +45,9 @@ def extract_custom (path = '', name_report = 'Закупки', name_pharm_chain 
         df_report['name_report'] = [name_report for x in range(len(df))]
         df_report['name_pharm_chain'] = [name_pharm_chain for x in range(len(df))]
         df_report['report_date'] = [report_date for x in range(len(df))]
-        df_report['start_date'] = [start_date for x in range(len(df))]
-        df_report['end_date'] = [end_date for x in range(len(df))]
-        df_report['processed_dttm'] = [str(datetime.datetime.now()) for x in range(len(df))]
+        df_report['start_date'] = [str(start_date) for x in range(len(df))]
+        df_report['end_date'] = [str(end_date) for x in range(len(df))]
+        df_report['processed_dttm'] = [str(datetime.now()) for x in range(len(df))]
         return {
             'table_report':     df_report,
             'table_drugstor':   df_drugstore
@@ -65,15 +66,20 @@ def extract_remain (path = '', name_report = 'Остатки', name_pharm_chain 
         df = df.astype(str)
         loger.info(f'Успешно получено {df[df.columns[0]].count()} строк!')
 
-        report_date = df.iloc[0,1]
-        period = df.iloc[1,1]
+        report_date = df.columns[1]
+        period = df.iloc[0,1]
         start_date, end_date = period.split(' - ')
-        start_date = (start_date, "%Y-%m-%d")
-        end_date = (end_date, "%Y-%m-%d")
+        start_date = datetime.strptime(start_date, "%d.%m.%Y")
+        end_date = datetime.strptime(end_date, "%d.%m.%Y")
         if start_date == end_date:
             end_date= end_date + timedelta(days = 1)
+            
+        start_row = df[df.iloc[:,0] == 'Организация'].index[0]
+        headers = df.iloc[start_row].values
 
-        #нужно добавить удаление пустых строк
+        df.columns = headers
+        df = df.drop(df.index[:start_row + 3])
+        df = df.reset_index(drop=True)
 
         df['uuid_report'] = [str(uuid.uuid4()) for x in range(len(df))]
         df['hash_drugstore'] = df.apply(create_text_hash, columns = ['Организация', 'ИНН', 'Склад'], axis=1)
@@ -83,9 +89,9 @@ def extract_remain (path = '', name_report = 'Остатки', name_pharm_chain 
         df_report['name_report'] = [name_report for x in range(len(df))]
         df_report['name_pharm_chain'] = [name_pharm_chain for x in range(len(df))]
         df_report['report_date'] = [report_date for x in range(len(df))]
-        df_report['start_date'] = [start_date for x in range(len(df))]
-        df_report['end_date'] = [end_date for x in range(len(df))]
-        df_report['processed_dttm'] = [str(datetime.datetime.now()) for x in range(len(df))]
+        df_report['start_date'] = [str(start_date) for x in range(len(df))]
+        df_report['end_date'] = [str(end_date) for x in range(len(df))]
+        df_report['processed_dttm'] = [str(datetime.now()) for x in range(len(df))]
         return {
             'table_report':     df_report,
             'table_drugstor':   df_drugstore
@@ -104,15 +110,20 @@ def extract_sale (path = '', name_report = 'Продажи', name_pharm_chain = 
         df = df.astype(str)
         loger.info(f'Успешно получено {df[df.columns[0]].count()} строк!')
 
-        report_date = df.iloc[0,1]
-        period = df.iloc[1,1]
+        report_date = df.columns[1]
+        period = df.iloc[0,1]
         start_date, end_date = period.split(' - ')
-        start_date = (start_date, "%Y-%m-%d")
-        end_date = (end_date, "%Y-%m-%d")
+        start_date = datetime.strptime(start_date, "%d.%m.%Y")
+        end_date = datetime.strptime(end_date, "%d.%m.%Y")
         if start_date == end_date:
             end_date= end_date + timedelta(days = 1)
 
-        #нужно добавить удаление пустых строк
+        start_row = df[df.iloc[:,0] == 'Организация'].index[0]
+        headers = df.iloc[start_row].values
+
+        df.columns = headers
+        df = df.drop(df.index[:start_row + 3])
+        df = df.reset_index(drop=True)
 
         df['uuid_report'] = [str(uuid.uuid4()) for x in range(len(df))]
         df['hash_drugstore'] = df.apply(create_text_hash, columns = ['Организация', 'ИНН', 'Склад'], axis=1)
@@ -122,9 +133,9 @@ def extract_sale (path = '', name_report = 'Продажи', name_pharm_chain = 
         df_report['name_report'] = [name_report for x in range(len(df))]
         df_report['name_pharm_chain'] = [name_pharm_chain for x in range(len(df))]
         df_report['report_date'] = [report_date for x in range(len(df))]
-        df_report['start_date'] = [start_date for x in range(len(df))]
-        df_report['end_date'] = [end_date for x in range(len(df))]
-        df_report['processed_dttm'] = [str(datetime.datetime.now()) for x in range(len(df))]
+        df_report['start_date'] = [str(start_date) for x in range(len(df))]
+        df_report['end_date'] = [str(end_date) for x in range(len(df))]
+        df_report['processed_dttm'] = [str(datetime.now()) for x in range(len(df))]
         return {
             'table_report':     df_report,
             'table_drugstor':   df_drugstore
@@ -146,4 +157,4 @@ def extract_xls (path, name_report, name_pharm_chain) -> dict:
 
 
 if __name__ == "__main__":
-    extract_xls(path='/home/ubuntu/Загрузки/отчеты/36,6/закуп/2024/12_2024.xlsx', name_report = 'Продажи', name_pharm_chain = 'Антэй')
+    extract_xls(path='/home/ubuntu/Загрузки/отчеты/Антей/Закуп/2023/03_2023.xlsx', name_report = 'Закупки', name_pharm_chain = 'Антэй')
