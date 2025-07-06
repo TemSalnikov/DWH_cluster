@@ -8,8 +8,8 @@ from urllib3.util.ssl_ import create_urllib3_context
 
 import csv
 
-task_id = 'caa506de-52f0-412f-adfa-f8e618a757b6'
-token = '57917097-2d9a-4be7-b62e-0619354ee113'
+# task_id = 'caa506de-52f0-412f-adfa-f8e618a757b6'
+# token = '57917097-2d9a-4be7-b62e-0619354ee113'
 
 # 1. Создаём адаптер с ГОСТ-шифрами
 class GOSTAdapter(HTTPAdapter):
@@ -35,13 +35,16 @@ CERT_SUBJECT = "Благодаренко Юрий Юрьевич"  # CN серт
 EXPORT_TASKS_URL = f"{API_URL}/data/export/tasks"
 TASK_STATUS_URL = f"{API_URL}/data/export/tasks/{{task_id}}"
 GET_RESULT_ID_URL = f"{API_URL}/data/export/results?page=0&size=1000&task_ids={{task_id}}"
+GET_MAX_TASKS_COUNT_URL = f"{API_URL}/export/tasks/settings"
+GET_LIST_TASKS_URL = f"{API_URL}/export/tasks/filter"
 DOWNLOAD_URL = f"{API_URL}/data/export/results/{{result_id}}/file"
+DELTE_RESULT_ID_URL = f"{API_URL}/data/export/results/{{result_id}}"
 
-data_interval_start = "2025-06-11 00:01:01"
-data_interval_end = "2025-06-20 00:01:01"
+# data_interval_start = "2025-06-11 00:01:01"
+# data_interval_end = "2025-06-20 00:01:01"
 
 REPORT_TYPES = [
-    "GENERAL_PRICING_REPORT",
+    # "GENERAL_PRICING_REPORT",
     "GENERAL_REPORT_ON_MOVEMENT",
     "GENERAL_REPORT_ON_REMAINING_ITEMS",
     "GENERAL_REPORT_ON_DISPOSAL"
@@ -157,8 +160,10 @@ def get_session_token(auth_code: str, signature: str):
     return token_data['token']
 
 
-
-def create_report_task(report_type, token):
+# period расчитывается по формуле из документации API МДЛП 
+# если period_type = 1027_IC_Period_Month_11_2019, то period = текущий_год * 12 +номер_месяца_в_году_выгрузки.
+# если period_type = 1028_IC_Period_Week, то period = (год_выгрузки - 1970) * 52,1786 + номер_недели_в_году_выгрузки.
+def create_report_task(report_type, token, period = "24305",  period_type = "1027_IC_Period_Month_11_2019"): 
     """Создание задачи на формирование отчета"""
     headers = {
         'Authorization': f'token {token}',
@@ -169,8 +174,8 @@ def create_report_task(report_type, token):
     payload = {
         "report_id": report_type,
         "params": {
-            "1026_IC_Period_Type_WM": "IC_Period_Month",
-            "1027_IC_Period_Month_11_2019": "24305"
+            "1026_IC_Period_Type_WM": period_type,
+            "1027_IC_Period_Month_11_2019": period
             # "date_from": "{data_interval_start}",
             # "date_to": "{data_interval_end}"
         }
@@ -199,10 +204,10 @@ def _get_result_id(task_id, token):
         raise RuntimeError(f"Failed to check task status: {response.text}")
     result = response.json()
     if result['list']:
-        return result['list'][0]['result_id']
+        return result['list'][0]
     return
 
-def _check_report_status(task_id, token):
+def check_report_status(task_id, token):
     """Проверка статуса задачи (внутренняя функция для сенсора)"""
     headers = {'Authorization': f'token {token}'}
     url = TASK_STATUS_URL.format(task_id=task_id)
@@ -216,17 +221,21 @@ def _check_report_status(task_id, token):
     
     status = response.json()['current_status']
     if status == 'COMPLETED':
-        return _get_result_id(task_id, token)
+        # return _get_result_id(task_id, token)
+        result_data = _get_result_id(task_id, token)
+        if result_data['download_status'] == "SUCCESS" and result_data['available'] == "AVAILABLE":
+            return result_data['result_id']
+        else: return False
     elif status == 'FAILED':
         raise RuntimeError(f"Task failed: {response.json().get('error_message', 'Unknown error')}")
     
     return False
 
 
-def download_report(report_type, task_id, token):
+def download_report(report_type, token, result_id):
     """Скачивание готового отчета"""
     # Проверяем статус и получаем result_id
-    result_id = _check_report_status(task_id, token)
+    
     
     if not result_id:
         raise RuntimeError("Report not ready for download")
@@ -242,17 +251,32 @@ def download_report(report_type, task_id, token):
         raise RuntimeError(f"Failed to download report: {response.text}")
     
     # Сохраняем файл временно
-    file_path = f"/tmp/{report_type}_{result_id}.csv"
+    file_path = f"/tmp/{report_type}_{result_id}.zip"
     with open(file_path, 'wb') as f:
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
     
     return file_path
 
+def complete_report(result_id, token, file_path):
+    """Проверка загрузки файла и удаление выгрузки на стороне МДЛП"""
+    if file_path:
+        headers = {'Authorization': f'token {token}'}
+        url = DELTE_RESULT_ID_URL.format(result_id=result_id)
+        response = session.delete(
+            url,
+            headers=headers
+        )
+        if response.status_code != 200:
+            raise RuntimeError(f"Failed to check task status: {response.text}")
+        return response.json()
+    raise RuntimeError(f"Failed to download report: {response.text}")
+    
+
 # def wait_for_report(report_type, task_id, token):
 #         return PythonSensor(
 #             task_id=f'wait_for_{report_type}',
-#             python_callable=lambda: _check_report_status(task_id, token),
+#             python_callable=lambda: check_report_status(task_id, token),
 #             op_kwargs={},
 #             mode='poke',
 #             poke_interval=5 * 60,  # Проверка каждые 5 минут
@@ -261,22 +285,61 @@ def download_report(report_type, task_id, token):
 #             soft_fail=False
         # )
 
+def _get_max_tasks_count(token):
+    """Проверка статуса задачи (внутренняя функция для сенсора)"""
+    headers = {'Authorization': f'token {token}'}
+    url = GET_MAX_TASKS_COUNT_URL
+    response = session.get(
+        url,
+        headers=headers
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to check task status: {response.text}")
+    return response.json()
+    
+def _get_list_tasks(token):
+    """Проверка статуса задачи (внутренняя функция для сенсора)"""
+    headers = {'Authorization': f'token {token}'}
+    url = GET_LIST_TASKS_URL
+    response = session.post(
+        url,
+        headers=headers,
+        json={"filter": {
+                "task_status": ["COMPLETED", "FAILED"]}
+            }
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to check task status: {response.text}")
+    return response.json()
+
 if __name__=="__main__":
+    # result_id = check_report_status(task_id, token)
+    # file_path = download_report("GENERAL_PRICING_REPORT",  token, result_id)
+    # complete = complete_report(task_id, token, file_path)
+    # print(file_path)
 
-    file_path = download_report("GENERAL_PRICING_REPORT", task_id, token)
-    with open(file_path, 'r') as csvfile:
-        report = csv.reader(csvfile)
-        for row in report:
-            print(row)
-
-    # result_id = _check_report_status(task_id, token)
+    # result_id = check_report_status(task_id, token)
     # print(result_id)
 
-    # auth_code = get_auth_code()
-    # auth_signature = sign_data(auth_code)
-    # session_token = get_session_token(auth_code, auth_signature)
+    auth_code = get_auth_code()
+    auth_signature = sign_data(auth_code)
+    session_token = get_session_token(auth_code, auth_signature)
+
+    max_count_tasks = _get_max_tasks_count(session_token)
+    print(max_count_tasks)
+
+    list_tasks =  _get_list_tasks(session_token)
+    print(list_tasks)
     
-    # for report_type in REPORT_TYPES:
-    #     task_id = create_report_task(report_type, session_token)
-    #     # wait_sensor = wait_for_report(report_type, task_id, session_token)
-    #     file_path = download_report(report_type, task_id, session_token)
+    for report_type in REPORT_TYPES:
+        task_id = create_report_task(report_type, session_token)
+        # wait_sensor = wait_for_report(report_type, task_id, session_token)
+        result_id = check_report_status(task_id, session_token)
+        file_path = download_report(report_type,  session_token, result_id)
+        print(file_path)
+    #нельза использовать complete_report пока нет прав доступа: GENERAL_PRICING_REPORT /
+    # #GENERAL_REPORT_ON_MOVEMENT / GENERAL_REPORT_ON_REMAINING_ITEMS /
+    # #GENERAL_REPORT_ON_DISPOSAL / VIRTUAL_WAREHOUSE_REPORT (в зависимости от
+    # #типа задания на выгрузку)
+    #     #complete = complete_report(task_id, session_token, file_path) 
+    
