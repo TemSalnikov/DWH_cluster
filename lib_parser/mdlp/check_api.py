@@ -37,6 +37,8 @@ TASK_STATUS_URL = f"{API_URL}/data/export/tasks/{{task_id}}"
 GET_RESULT_ID_URL = f"{API_URL}/data/export/results?page=0&size=1000&task_ids={{task_id}}"
 GET_MAX_TASKS_COUNT_URL = f"{API_URL}/export/tasks/settings"
 GET_LIST_TASKS_URL = f"{API_URL}/export/tasks/filter"
+GET_REF_EGRUL = f"{API_URL}/reestr/egrul"
+GET_REF_EGRPI = f"{API_URL}/reestr/egrip"
 DOWNLOAD_URL = f"{API_URL}/data/export/results/{{result_id}}/file"
 DELTE_RESULT_ID_URL = f"{API_URL}/data/export/results/{{result_id}}"
 
@@ -44,7 +46,7 @@ DELTE_RESULT_ID_URL = f"{API_URL}/data/export/results/{{result_id}}"
 # data_interval_end = "2025-06-20 00:01:01"
 
 REPORT_TYPES = [
-    # "GENERAL_PRICING_REPORT",
+    "GENERAL_PRICING_REPORT",
     "GENERAL_REPORT_ON_MOVEMENT",
     "GENERAL_REPORT_ON_REMAINING_ITEMS",
     "GENERAL_REPORT_ON_DISPOSAL"
@@ -312,6 +314,29 @@ def _get_list_tasks(token):
         raise RuntimeError(f"Failed to check task status: {response.text}")
     return response.json()
 
+def _get_ref_egrul(token):
+    """Проверка статуса задачи (внутренняя функция для сенсора)"""
+    headers = {'Authorization': f'token {token}'}
+    url = GET_REF_EGRUL
+    response = session.get(
+        url,
+        headers=headers
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to check task status: {response.text}")
+    return response.json()
+def _get_ref_egrpi(token):
+    """Проверка статуса задачи (внутренняя функция для сенсора)"""
+    headers = {'Authorization': f'token {token}'}
+    url = GET_REF_EGRPI
+    response = session.get(
+        url,
+        headers=headers
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to check task status: {response.text}")
+    return response.json()
+
 if __name__=="__main__":
     # result_id = check_report_status(task_id, token)
     # file_path = download_report("GENERAL_PRICING_REPORT",  token, result_id)
@@ -325,11 +350,15 @@ if __name__=="__main__":
     auth_signature = sign_data(auth_code)
     session_token = get_session_token(auth_code, auth_signature)
 
-    max_count_tasks = _get_max_tasks_count(session_token)
-    print(max_count_tasks)
+    egrul = _get_ref_egrul(session_token)
+    print(egrul)
+    # egrpi = _get_ref_egrpi(session_token)
+    # print(egrpi)
+    # max_count_tasks = _get_max_tasks_count(session_token)
+    # print(max_count_tasks)
 
-    list_tasks =  _get_list_tasks(session_token)
-    print(list_tasks)
+    # list_tasks =  _get_list_tasks(session_token)
+    # print(list_tasks)
     
     for report_type in REPORT_TYPES:
         task_id = create_report_task(report_type, session_token)
