@@ -6,6 +6,7 @@ import os
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 
+import time
 import csv
 
 # task_id = 'caa506de-52f0-412f-adfa-f8e618a757b6'
@@ -36,7 +37,7 @@ EXPORT_TASKS_URL = f"{API_URL}/data/export/tasks"
 TASK_STATUS_URL = f"{API_URL}/data/export/tasks/{{task_id}}"
 GET_RESULT_ID_URL = f"{API_URL}/data/export/results?page=0&size=1000&task_ids={{task_id}}"
 GET_MAX_TASKS_COUNT_URL = f"{API_URL}/export/tasks/settings"
-GET_LIST_TASKS_URL = f"{API_URL}/export/tasks/filter"
+GET_LIST_TASKS_URL = f"{API_URL}/data/export/tasks/search"
 GET_REF_EGRUL = f"{API_URL}/reestr/egrul"
 GET_REF_EGRPI = f"{API_URL}/reestr/egrip"
 DOWNLOAD_URL = f"{API_URL}/data/export/results/{{result_id}}/file"
@@ -306,8 +307,8 @@ def _get_list_tasks(token):
     response = session.post(
         url,
         headers=headers,
-        json={"filter": {
-                "task_status": ["COMPLETED", "FAILED"]}
+        json={
+                "current_statuses": ["PREPARATION","COMPLETED", "FAILED"]
             }
     )
     if response.status_code != 200:
@@ -350,8 +351,8 @@ if __name__=="__main__":
     auth_signature = sign_data(auth_code)
     session_token = get_session_token(auth_code, auth_signature)
 
-    egrul = _get_ref_egrul(session_token)
-    print(egrul)
+    # egrul = _get_ref_egrul(session_token)
+    # print(egrul)
     # egrpi = _get_ref_egrpi(session_token)
     # print(egrpi)
     # max_count_tasks = _get_max_tasks_count(session_token)
@@ -359,12 +360,22 @@ if __name__=="__main__":
 
     # list_tasks =  _get_list_tasks(session_token)
     # print(list_tasks)
-    
+    task_ids = []
+    # task_ids =[
+    #         {'task_id':'e52e612d-53cc-4081-b737-26fc334362b8', 'report_type':"GENERAL_PRICING_REPORT"},
+    #         {'task_id':'6547ce9b-5b74-4cdb-8ad6-094a60334d13', 'report_type':"GENERAL_REPORT_ON_MOVEMENT"},
+    #         {'task_id':'5bada038-439e-4a9a-b400-a5f6dde9cbbf', 'report_type':"GENERAL_REPORT_ON_REMAINING_ITEMS"},
+    #         {'task_id':'4f527b14-5e3c-4a27-9779-62df6118362e', 'report_type':"GENERAL_REPORT_ON_DISPOSAL"}]
     for report_type in REPORT_TYPES:
-        task_id = create_report_task(report_type, session_token)
+        task = create_report_task(report_type, session_token, period='24302')
+        task_ids.append({'task_id': task, 'report_type': report_type})
+        time.sleep(61)
+    for task_id in task_ids:
+
         # wait_sensor = wait_for_report(report_type, task_id, session_token)
-        result_id = check_report_status(task_id, session_token)
-        file_path = download_report(report_type,  session_token, result_id)
+        result_id = check_report_status(task_id['task_id'], session_token)
+        file_path = download_report(task_id['report_type'],  session_token, result_id)
+        time.sleep(61)
         print(file_path)
     #нельза использовать complete_report пока нет прав доступа: GENERAL_PRICING_REPORT /
     # #GENERAL_REPORT_ON_MOVEMENT / GENERAL_REPORT_ON_REMAINING_ITEMS /

@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow.decorators import task, dag
 from airflow.sensors.python import PythonSensor
 from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow.models import Param
+from airflow.models import Variable, Param
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
@@ -17,20 +17,14 @@ import os
 import glob
 import pandas as pd
 import zipfile
-import os
-import sys
-script_path = os.path.abspath(__file__)
-project_path = os.path.dirname(script_path)+'/libs'
-sys.path.append(project_path)
-
 # from kafka_producer_common_for_xls import create_producer, send_dataframe
 from datetime import datetime as dt
 
 # Класс адаптера для ГОСТ-шифров
 class GOSTAdapter(HTTPAdapter):
-    def init_poolmanager(self, *args, **kwargs):
+    def init_poolmanager(*args, **kwargs):
         context = create_urllib3_context(ciphers="GOST2012-GOST8912-GOST8912")
-        kwargs["ssl_context"] = context  # Передаём контекст в urllib3
+        kwargs["ssl_context"] = context
         return super().init_poolmanager(*args, **kwargs)
 
 # Конфигурация
@@ -75,13 +69,13 @@ default_args = {
     params={
         'period_type': Param(
             "1027_IC_Period_Month_11_2019",
-            # type="string",
+            type='string',
             description='Тип периода (1027_IC_Period_Month_11_2019 или 1028_IC_Period_Week)'
         ),
-        'dates_to': Param(
-            ["2025-07-18","2025-07-25"],
-            # type="string",
-            format='list',
+        'date_to': Param(
+            None,
+            type='string',
+            format='date',
             description='Дата окончания периода в формате YYYY-MM-DD'
         )
     },
@@ -94,7 +88,6 @@ def wf_mdlp_kafka_mart_mdlp_report():
         session = requests.Session()
         session.mount("https://", GOSTAdapter())
         session.verify = False  # Отключаем проверку сертификата
-        session.cert = ("/home/downloads/cert.pem", "/home/downloads/key.pem")  # Пути к сертификату и ключу
         return session
 
     @task
@@ -215,26 +208,25 @@ def wf_mdlp_kafka_mart_mdlp_report():
         # Получаем параметры из контекста
         params = context['params']
         period_type = params['period_type']
-        dates_to = params['dates_to'] or context['data_interval_end'].strftime('%Y-%m-%d')
+        date_to = params['date_to'] or context['data_interval_end'].strftime('%Y-%m-%d')
         
-        for date_to in dates_to:
-            # Параметры запроса
-            payload = {
-                "report_id": report_type,
-                "params": {
-                    "1026_IC_Period_Type_WM": period_type,
-                    period_type: calculate_period_value(period_type, date_to)
-                }
+        # Параметры запроса
+        payload = {
+            "report_id": report_type,
+            "params": {
+                "1026_IC_Period_Type_WM": period_type,
+                period_type: calculate_period_value(period_type, date_to)
             }
-            
-            response = session.post(
-                EXPORT_TASKS_URL,
-                headers=headers,
-                json=payload
-            )
-            
-            if response.status_code != 200:
-                raise RuntimeError(f"Failed to create task for {report_type}: {response.text}")
+        }
+        
+        response = session.post(
+            EXPORT_TASKS_URL,
+            headers=headers,
+            json=payload
+        )
+        
+        if response.status_code != 200:
+            raise RuntimeError(f"Failed to create task for {report_type}: {response.text}")
         
         return response.json()['task_id']
     
@@ -381,7 +373,7 @@ def wf_mdlp_kafka_mart_mdlp_report():
         return translated_columns
 
     @task
-    def process_and_send_reports(extract_tasks, **context):
+    def process_and_send_reports(**context):
         """Обработка отчетов и отправка в Kafka"""
         from kafka_producer_common_for_xls import create_producer, send_dataframe
         from airflow.models import Variable
@@ -503,30 +495,23 @@ def wf_mdlp_kafka_mart_mdlp_report():
             soft_fail=False
         )
     
-    @task
-    def get_report(task_id, session_token, **context):
-    # Список для хранения задач извлечения отчетов
-        
-        return extract_tasks
-    
     # Основной поток выполнения
     auth_code = get_auth_code()
     auth_signature = sign_data(auth_code)
     session_token = get_session_token(auth_code, auth_signature)
     
-    # extract_tasks = get_report(session_token)
+    # Список для хранения задач извлечения отчетов
     extract_tasks = []
     
     for report_type in REPORT_TYPES:
-        task_ids = create_report_task(report_type, session_token)
-        wait_sensor = wait_for_report(report_type, task_ids, session_token)
-        zip_path = download_report(report_type, task_ids, session_token)
+        task_id = create_report_task(report_type, session_token)
+        wait_sensor = wait_for_report(report_type, task_id, session_token)
+        zip_path = download_report(report_type, task_id, session_token)
         csv_path = extract_report(zip_path, report_type)
         
         # Формируем цепочку зависимостей
-        task_ids >> wait_sensor >> zip_path >> csv_path
+        task_id >> wait_sensor >> zip_path >> csv_path
         extract_tasks.append(csv_path)
-    
     
     # Добавляем задачи обработки и сохранения метаданных
     processed_reports = process_and_send_reports(extract_tasks)

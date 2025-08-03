@@ -12,7 +12,7 @@ import requests
 import subprocess
 import tempfile
 import re
-import json
+import ssl
 import os
 import glob
 import pandas as pd
@@ -27,11 +27,41 @@ sys.path.append(project_path)
 from datetime import datetime as dt
 
 # Класс адаптера для ГОСТ-шифров
-class GOSTAdapter(HTTPAdapter):
-    def init_poolmanager(self, *args, **kwargs):
-        context = create_urllib3_context(ciphers="GOST2012-GOST8912-GOST8912")
-        kwargs["ssl_context"] = context  # Передаём контекст в urllib3
-        return super().init_poolmanager(*args, **kwargs)
+# class GOSTAdapter(HTTPAdapter):
+#     def init_poolmanager(self, *args, **kwargs):
+#         # context = create_urllib3_context(ciphers="GOST2012-GOST8912-GOST8912")
+#         context = create_urllib3_context()
+#         context.set_ciphers("GOST2012-GOST8912-GOST8912")
+#         kwargs["ssl_context"] = context  # Передаём контекст в urllib3
+#         return super().init_poolmanager(*args, **kwargs)
+###
+# class GOSTAdapter(HTTPAdapter):
+#     def init_poolmanager(self, *args, **kwargs):
+#         context = create_urllib3_context()
+        
+#         # Попробуйте разные варианты названий шифров
+#         try:
+#             # Вариант 1: Общий префикс
+#             # context.set_ciphers("GOST")
+#             # Настройки для работы с MDLP
+            
+#             context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1 | ssl.OP_NO_TLSv1_3
+#             context.minimum_version = ssl.TLSVersion.TLSv1
+#             context.set_ciphers("GOST2012-GOST8912-GOST8912:GOST2001-GOST89-GOST89:@SECLEVEL=1") # Понижаем уровень безопасности
+#         except ssl.SSLError:
+#             try:
+#                 # Вариант 2: Более конкретные имена
+#                 context.set_ciphers("GOST2012-GOST8912-GOST8912:GOST2001-GOST89-GOST89")
+#             except ssl.SSLError:
+#                 # Вариант 3: Безопасный fallback
+#                 logger.warning("GOST ciphers not available, using DEFAULT")
+#                 context.set_ciphers("DEFAULT")
+        
+#         kwargs["ssl_context"] = context
+#         return super().init_poolmanager(*args, **kwargs)
+
+
+
 
 # Конфигурация
 API_URL = "https://api.mdlp.crpt.ru/api/v1"
@@ -91,32 +121,124 @@ def wf_mdlp_kafka_mart_mdlp_report():
     
     # Создаем сессию с ГОСТ-адаптером
     def create_gost_session():
-        session = requests.Session()
-        session.mount("https://", GOSTAdapter())
-        session.verify = False  # Отключаем проверку сертификата
-        session.cert = ("/home/downloads/cert.pem", "/home/downloads/key.pem")  # Пути к сертификату и ключу
-        return session
+        try:
+            class GOSTAdapter(HTTPAdapter):
+                def init_poolmanager(self, *args, **kwargs):
+                    context = create_urllib3_context()
+                    
+                    # Попробуйте разные варианты названий шифров
+                    try:
+                        # Вариант 1: Общий префикс
+                        # context.set_ciphers("GOST")
+                        # Настройки для работы с MDLP
+                        
+                        context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1 | ssl.OP_NO_TLSv1_3
+                        context.minimum_version = ssl.TLSVersion.TLSv1
+                        context.set_ciphers("GOST2012-GOST8912-GOST8912:GOST2001-GOST89-GOST89:@SECLEVEL=1") # Понижаем уровень безопасности
+                    except ssl.SSLError:
+                        try:
+                            # Вариант 2: Более конкретные имена
+                            context.set_ciphers("GOST2012-GOST8912-GOST8912:GOST2001-GOST89-GOST89:@SECLEVEL=1")
+                        except ssl.SSLError:
+                            # Вариант 3: Безопасный fallback
+                            logger.warning("GOST ciphers not available, using DEFAULT")
+                            context.set_ciphers("DEFAULT")
+                    
+                    kwargs["ssl_context"] = context
+                    return super().init_poolmanager(*args, **kwargs)
+
+            session = requests.Session()
+            session.mount("https://", GOSTAdapter())
+            session.verify = False  # Отключаем проверку сертификата
+            session.cert = ("/opt/airflow/key/cert.pem", "/opt/airflow/key/cert.key")  # Пути к сертификату и ключу
+            return session
+        except Exception as e:
+            logger.error(f"Ошибка создания сессии: {str(e)}")
+            raise
+
+    # 1. Создаём адаптер с ГОСТ-шифрами
+    # class GOSTAdapter(HTTPAdapter):
+    #     def init_poolmanager(self, *args, **kwargs):
+    #         context = create_urllib3_context()
+    #         context.set_ciphers("GOST2012-GOST8912-GOST8912:GOST2001-GOST89-GOST89:@SECLEVEL=1")
+    #         kwargs["ssl_context"] = context  # Передаём контекст в urllib3
+    #         return super().init_poolmanager(*args, **kwargs)
+
+    
 
     @task
-    def get_auth_code():
+    def check_gost_support():
+        import ssl
+        # from cryptography.hazmat.backends import default_backend
+        
+        logger.info(f"OpenSSL version: {ssl.OPENSSL_VERSION}")
+        
+        # Проверка доступных шифров
+        context = ssl.create_default_context()
+        ciphers = context.get_ciphers()
+        logger.info(f"ALL ciphers: {ciphers}")
+        gost_ciphers = [cipher for cipher in ciphers if "GOST" in cipher['name']]
+        
+        if not gost_ciphers:
+            logger.warning("No GOST ciphers available!")
+        else:
+            logger.info(f"Available GOST ciphers: {', '.join([c['name'] for c in gost_ciphers])}")
+        
+        # Проверка поддержки GOST Engine
+        try:
+            from cryptography.hazmat.bindings.openssl import binding
+            openssl = binding.Binding()
+            engines = openssl.lib.ENGINE_get_first()
+            gost_found = False
+            
+            while engines:
+                name = openssl.ffi.string(openssl.lib.ENGINE_get_name(engines))
+                if b"gost" in name.lower():
+                    logger.info(f"GOST engine found: {name.decode()}")
+                    gost_found = True
+                engines = openssl.lib.ENGINE_get_next(engines)
+            
+            if not gost_found:
+                logger.warning("GOST engine not loaded!")
+        
+        except Exception as e:
+            logger.error(f"Engine check failed: {str(e)}")
+
+    @task
+    def test_connection(test):
+                
+        try:
+            session = create_gost_session()
+            response = session.get("https://api.mdlp.crpt.ru/api/v1", timeout=10)
+            logger.info(f"Connection test status: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Connection failed: {str(e)}")
+            raise
+
+    @task
+    def get_auth_code(check_ciphers):
         """Получение кода аутентификации"""
         session = create_gost_session()
-        url = f"{API_URL}/auth"
-        payload = {
-            "client_secret": CLIENT_SECRET,
-            "client_id": CLIENT_ID,
-            "user_id": USER_ID,
-            "auth_type": "SIGNED_CODE"
-        }
-        
-        headers = {'Content-Type': 'application/json;charset=UTF-8'}
-        
-        logger.info(f"Запрос кода аутентификации: {url}")
-        response = session.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        
-        logger.info(f"Ответ получен: {response.status_code}")
-        return response.json()['code']
+        try:
+            url = f"{API_URL}/auth"
+            payload = {
+                "client_secret": CLIENT_SECRET,
+                "client_id": CLIENT_ID,
+                "user_id": USER_ID,
+                "auth_type": "SIGNED_CODE"
+            }
+            
+            headers = {'Content-Type': 'application/json;charset=UTF-8'}
+            
+            logger.info(f"Запрос кода аутентификации: {url}")
+            response = session.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            logger.info(f"Ответ получен: {response.status_code}")
+            return response.json()['code']
+        except Exception as e:
+            logger.error(f"Ошибка получение кода аутентификации: {str(e)}")
+            raise
 
     @task
     def sign_data(data: str, is_document: bool = False) -> str:
@@ -188,55 +310,63 @@ def wf_mdlp_kafka_mart_mdlp_report():
     def get_session_token(auth_code: str, signature: str):
         """Получение токена доступа"""
         session = create_gost_session()
-        url = f"{API_URL}/token"
-        payload = {
-            "code": auth_code,
-            "signature": signature
-        }
-        headers = {'Content-Type': 'application/json'}
-        
-        logger.info(f"Запрос токена сессии: {url}")
-        response = session.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        
-        token_data = response.json()
-        logger.info(f"Токен получен, срок жизни: {token_data['life_time']} минут")
-        return token_data['token']
+        try:
+            url = f"{API_URL}/token"
+            payload = {
+                "code": auth_code,
+                "signature": signature
+            }
+            headers = {'Content-Type': 'application/json'}
+            
+            logger.info(f"Запрос токена сессии: {url}")
+            response = session.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            token_data = response.json()
+            logger.info(f"Токен получен, срок жизни: {token_data['life_time']} минут")
+            return token_data['token']
+        except Exception as e:
+            logger.error(f"Ошибка получение токена доступа: {str(e)}")
+            raise
 
     @task
     def create_report_task(report_type, token, **context):
         """Создание задачи на формирование отчета"""
         session = create_gost_session()
-        headers = {
-            'Authorization': f'token {token}',
-            'Content-Type': 'application/json'
-        }
-        
-        # Получаем параметры из контекста
-        params = context['params']
-        period_type = params['period_type']
-        dates_to = params['dates_to'] or context['data_interval_end'].strftime('%Y-%m-%d')
-        
-        for date_to in dates_to:
-            # Параметры запроса
-            payload = {
-                "report_id": report_type,
-                "params": {
-                    "1026_IC_Period_Type_WM": period_type,
-                    period_type: calculate_period_value(period_type, date_to)
-                }
+        try:
+            headers = {
+                'Authorization': f'token {token}',
+                'Content-Type': 'application/json'
             }
             
-            response = session.post(
-                EXPORT_TASKS_URL,
-                headers=headers,
-                json=payload
-            )
+            # Получаем параметры из контекста
+            params = context['params']
+            period_type = params['period_type']
+            dates_to = params['dates_to'] or context['data_interval_end'].strftime('%Y-%m-%d')
             
-            if response.status_code != 200:
-                raise RuntimeError(f"Failed to create task for {report_type}: {response.text}")
-        
-        return response.json()['task_id']
+            for date_to in dates_to:
+                # Параметры запроса
+                payload = {
+                    "report_id": report_type,
+                    "params": {
+                        "1026_IC_Period_Type_WM": period_type,
+                        period_type: calculate_period_value(period_type, date_to)
+                    }
+                }
+                
+                response = session.post(
+                    EXPORT_TASKS_URL,
+                    headers=headers,
+                    json=payload
+                )
+                
+                if response.status_code != 200:
+                    raise RuntimeError(f"Failed to create task for {report_type}: {response.text}")
+            
+            return response.json()['task_id']
+        except Exception as e:
+            logger.error(f"Ошибка задачи на формирование отчета: {str(e)}")
+            raise
     
     def calculate_period_value(period_type, date_to):
         """Расчет значения периода по типу периода и дате окончания"""
@@ -254,17 +384,21 @@ def wf_mdlp_kafka_mart_mdlp_report():
     def _get_result_id(task_id, token):
         """Получение result_id по task_id"""
         session = create_gost_session()
-        headers = {'Authorization': f'token {token}'}
-        url = GET_RESULT_ID_URL.format(task_id=task_id)
-        response = session.get(url, headers=headers)
-        
-        if response.status_code != 200:
-            raise RuntimeError(f"Failed to get result ID: {response.text}")
-        
-        result = response.json()
-        if result['list']:
-            return result['list'][0]
-        return None
+        try:
+            headers = {'Authorization': f'token {token}'}
+            url = GET_RESULT_ID_URL.format(task_id=task_id)
+            response = session.get(url, headers=headers)
+            
+            if response.status_code != 200:
+                raise RuntimeError(f"Failed to get result ID: {response.text}")
+            
+            result = response.json()
+            if result['list']:
+                return result['list'][0]
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка получение result_id по task_id: {str(e)}")
+            raise
 
     def check_report_status(task_id, token):
         """Проверка статуса задачи"""
@@ -510,7 +644,9 @@ def wf_mdlp_kafka_mart_mdlp_report():
         return extract_tasks
     
     # Основной поток выполнения
-    auth_code = get_auth_code()
+    check_ciphers=check_gost_support()
+    test_con = test_connection(check_ciphers)
+    auth_code = get_auth_code(test_con)
     auth_signature = sign_data(auth_code)
     session_token = get_session_token(auth_code, auth_signature)
     
