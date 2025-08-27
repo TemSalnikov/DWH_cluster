@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.models import Param, Variable
 from airflow.utils.task_group import TaskGroup
 from airflow.providers.postgres.hooks.postgres import PostgresHook
@@ -30,7 +30,12 @@ def parse_json_output(output):
     except:
         return {}
 
-
+def _skip_if_fail(task_bash, **context):
+    # ti = context["ti"]
+    # Получаем результат из XCom
+    result = str(context["ti"].xcom_pull(task_ids=task_bash)).strip().lower()
+    print(f'result:{result}')
+    return result != "false" 
 
         
     
@@ -107,14 +112,14 @@ def save_metadata_to_postgres(**context):
 
 with DAG(
     dag_id='wf_mdlp_kafka_mart_mdlp_report_bash',
-    schedule_interval='@weekly',
+    schedule_interval='0 9 * * 2',
     start_date=datetime(2023, 1, 1),
     default_args=default_args,
     catchup=False,
     params={
         'period_type': Param(
-            "1027_IC_Period_Month_11_2019",
-            description='Тип периода'
+            "IC_Period_Week",
+            description='Тип периода (IC_Period_Month или IC_Period_Week)'
         ),
         'dates_to': Param(
             [datetime.today().strftime("%Y-%m-%d")],
@@ -154,7 +159,8 @@ with DAG(
         ),
         do_xcom_push=True
     )
-
+ 
+    prev_group_end = None
     # ===== Обработка отчетов =====
     with TaskGroup(group_id='process') as process_group:
         for report_type in REPORT_TYPES:
@@ -191,42 +197,93 @@ with DAG(
                     bash_command=(
                         'python /opt/airflow/dags/libs/mdlp_api_utils.py download_report '
                         '--token {{ ti.xcom_pull(task_ids="get_session_token") | tojson }} '
-                        '--result-id {{ ti.xcom_pull(task_ids="process.{report_type}.check_status_{report_type}") | tojson }} '
+                        f'--result-id {{{{ ti.xcom_pull(task_ids="process.{report_type}.check_status_{report_type}") | tojson }}}} '
                         f'--report-type {report_type} '
                         '--date-to "{{ params.dates_to[0] }}"'
                     ),
                     do_xcom_push=True
                 ) 
+                extract_report = BashOperator(
+                    task_id=f'extract_{report_type}',
+                    bash_command=(
+                        'python /opt/airflow/dags/libs/mdlp_report_processor.py extract_report '
+                        f'--zip-path {{{{ ti.xcom_pull(task_ids="process.{report_type}.download_{report_type}") }}}} '
+                    ),
+                    do_xcom_push=True
+                )
 
-                # Обработка и отправка в Kafka
+                check_data_report = BashOperator(
+                    task_id=f'check_data_{report_type}',
+                    bash_command=(
+                        'python /opt/airflow/dags/libs/mdlp_report_processor.py check_data_inreport '
+                        f'--csv-path {{{{ ti.xcom_pull(task_ids="process.{report_type}.extract_{report_type}") }}}} '
+                    ),
+                    do_xcom_push=True
+                )
+
+                skip_check = ShortCircuitOperator(
+                    task_id=f"skip_check_{report_type}",
+                    python_callable=_skip_if_fail,
+                    op_kwargs={"task_bash": f"process.{report_type}.check_data_{report_type}"},
+                    provide_context=True,
+                    dag=dag,
+                    )
+
                 process_report = BashOperator(
                     task_id=f'process_{report_type}',
                     bash_command=(
-                        'python /opt/airflow/dags/libs/mdlp_report_processor.py '
-                        '--zip-path {{ ti.xcom_pull(task_ids="process.{report_type}.download_{report_type}").get("file_path") }} '
+                        'python /opt/airflow/dags/libs/mdlp_report_processor.py process_report '
+                        f'--csv-path {{{{ ti.xcom_pull(task_ids="process.{report_type}.extract_{report_type}") }}}} '
                         f'--report-type {report_type} '
                         '--date-to "{{ params.dates_to[0] }}"'
                     ),
                     do_xcom_push=True
                 )
 
-                # Оркестрация внутри группы отчета
-                create_task >> check_status >> download_report >> process_report
 
-    # ===== Сохранение метаданных =====
-    save_metadata = PythonOperator(
-        task_id='save_metadata',
-        python_callable=save_metadata_to_postgres,
-        provide_context=True
-    )
+                # if prev_group_end is not None:
+                #     prev_group_end >> create_task
+
+                # Оркестрация внутри группы отчета
+                create_task >> check_status >> download_report >> extract_report >> check_data_report >> skip_check >> process_report
+                # prev_group_end = download_report
+            
+            
+
+            # report_group >> process_report
+
+                
+    # with TaskGroup(group_id='process') as process_group:
+    #     for report_type in REPORT_TYPES:
+    #         # Обработка и отправка в Kafka
+    #         process_report = BashOperator(
+    #             task_id=f'process_{report_type}',
+    #             bash_command=(
+    #                 'python /opt/airflow/dags/libs/mdlp_report_processor.py '
+    #                 f'--zip-path {{{{ ti.xcom_pull(task_ids="download.{report_type}.download_{report_type}") }}}} '
+    #                 f'--report-type {report_type} '
+    #                 '--date-to "{{ params.dates_to[0] }}"'
+    #             ),
+    #             do_xcom_push=True
+    #         )
+
+
+
+
+    # # ===== Сохранение метаданных =====
+    # save_metadata = PythonOperator(
+    #     task_id='save_metadata',
+    #     python_callable=save_metadata_to_postgres,
+    #     provide_context=True
+    # )
 
     # ===== Очистка =====
     cleanup = BashOperator(
         task_id='cleanup',
-        bash_command='echo "Removing temporary files" && rm -f /tmp/*.zip /tmp/extracted/*.csv',
+        bash_command='echo "Removing temporary files" && rm -f /tmp/mdlp/*.zip /tmp/mdlp/extracted/*.csv',
         trigger_rule='all_done'
     )
 
     # ===== Оркестрация =====
     init_state >> get_auth_code >> sign_auth_code >> get_session_token >> process_group
-    process_group >> save_metadata >> cleanup
+    process_group >> cleanup

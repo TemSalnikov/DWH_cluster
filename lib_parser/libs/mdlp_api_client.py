@@ -19,7 +19,7 @@ USER_ID = "F8851B3675EC0C2CD9664A83C46CE62FC5F594EB"
 CERT_SUBJECT = "Благодаренко Юрий Юрьевич"
 CERT_PATH = "/opt/airflow/key/cert.pem"
 KEY_PATH = "/opt/airflow/key/cert.key"
-TEMP_DIR = "/tmp"
+TEMP_DIR = "/tmp/mdlp"
 REPORT_TYPES = [
     "GENERAL_PRICING_REPORT",
     "GENERAL_REPORT_ON_MOVEMENT",
@@ -156,20 +156,32 @@ def create_report_task(token, report_type, period_type, date_to):
     headers = {'Authorization': f'token {token}',
         'Content-Type': 'application/json'}
     
-    payload = {
-        "report_id": report_type,
-        "params": {
-            "1026_IC_Period_Type_WM": period_type,
-            period_type: str(_calculate_period(period_type, date_to))
+    if period_type == "IC_Period_Month":
+        period = "1027_IC_Period_Month_11_2019"
+    elif period_type == "IC_Period_Week":
+        if report_type in ["GENERAL_PRICING_REPORT", "GENERAL_REPORT_ON_DISPOSAL"]:
+            period = "1028_IC_Period_Week"
+        elif report_type == "GENERAL_REPORT_ON_MOVEMENT":
+            period = "1029_IC_Period_Week_now"
+    if report_type == "GENERAL_REPORT_ON_REMAINING_ITEMS":
+        payload = {
+            "report_id": report_type
         }
-    }
+    else:
+        payload = {
+            "report_id": report_type,
+            "params": {
+                "1026_IC_Period_Type_WM": period_type,
+                period: str(_calculate_period(period_type, date_to))
+            }
+        }
     print(f'url:{url}')
     print(f'headers:{headers}')
     print(f'payload:{payload}')
     
     response = session.post(url, json=payload, headers=headers)
     response.raise_for_status()
-    print(f'response:{response}')
+    print(f'response:{response.json()}')
     
     return response.json()['task_id']
 
@@ -180,14 +192,19 @@ def check_report_status(token, task_id):
     session = create_session()
     url = f"{API_URL}/data/export/tasks/{task_id}"
     headers = {'Authorization': f'token {token}'}
+    print(f'url:{url}')
+    print(f'headers:{headers}')
     response = session.get(url, headers=headers)
     response.raise_for_status()
+
+    print(response.json())
     
     status = response.json()['current_status']
     if status == 'COMPLETED':
         result_id = _get_result_id(token, task_id)
         if result_id:
-            
+            print(f'status:{status}')
+            print(f'result_id:{result_id}')
             return result_id
     elif status == 'FAILED':
         raise RuntimeError(f"Task failed: {response.json().get('error_message')}")
@@ -201,9 +218,13 @@ def download_report(token, result_id, report_type, date_to):
     session = create_session()
     url = f"{API_URL}/data/export/results/{result_id}/file"
     headers = {'Authorization': f'token {token}'}
+    print(f'url:{url}')
+    print(f'headers:{headers}')
     
     response = session.get(url, headers=headers, stream=True)
     response.raise_for_status()
+
+    print(response)
     
     os.makedirs(TEMP_DIR, exist_ok=True)
     file_path = f"{TEMP_DIR}/{report_type}_{date_to}_{result_id}.zip"
@@ -219,10 +240,10 @@ def _calculate_period(period_type, date_to):
     from datetime import datetime
     dt_date = datetime.strptime(date_to, '%Y-%m-%d')
     
-    if period_type == "1027_IC_Period_Month_11_2019":
+    if period_type == "IC_Period_Month":
         return dt_date.year * 12 + dt_date.month
-    elif period_type == "1028_IC_Period_Week":
-        return int((dt_date.year - 1970) * 52.1786 + dt_date.isocalendar()[1])
+    elif period_type == "IC_Period_Week":
+        return int((dt_date.year - 1970) * 52.1786 + dt_date.isocalendar()[1]) - 1
     else:
         raise ValueError(f"Unsupported period type: {period_type}")
 
@@ -231,10 +252,11 @@ def _get_result_id(token, task_id):
     session = create_session()
     url = f"{API_URL}/data/export/results?page=0&size=1000&task_ids={task_id}"
     headers = {'Authorization': f'token {token}'}
-    
+    print(f'url:{url}')
+    print(f'headers:{headers}')
     response = session.get(url, headers=headers)
     response.raise_for_status()
-    
+    print(response.json()) 
     if response.json()['list']:
         return response.json()['list'][0]['result_id']
     return None

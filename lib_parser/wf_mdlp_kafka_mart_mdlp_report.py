@@ -97,7 +97,7 @@ default_args = {
 
 @dag(
     dag_id='wf_mdlp_kafka_mart_mdlp_report',
-    schedule_interval='@daily',
+    # schedule_interval='@daily',
     start_date=datetime(2023, 1, 1),
     default_args=default_args,
     catchup=False,

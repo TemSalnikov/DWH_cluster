@@ -4,7 +4,7 @@ x-airflow-common:
   # In order to add custom dependencies or upgrade provider packages you can use your extended image.
   # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
-  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.7.3}
+  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.7.3-python3.10}
   # build: .
   environment:
     &airflow-common-env
@@ -109,9 +109,9 @@ services:
       nofile:
         soft: 262144
         hard: 262144
-    # ports:
-    # - 9001:9000
-    # - 8123:8123
+    ports:
+    - 9001:9000
+    - 8123:8123
     networks:
       click_network: {}
     volumes:
@@ -128,9 +128,9 @@ services:
       nofile:
         soft: 262144
         hard: 262144
-    # ports:
-    # - 9002:9000
-    # - 8124:8123
+    ports:
+    - 9002:9000
+    - 8124:8123
     networks:
       click_network: {}
     volumes:
@@ -147,9 +147,9 @@ services:
       nofile:
         soft: 262144
         hard: 262144
-    # ports:
-    # - 9003:9000
-    # - 8125:8123
+    ports:
+    - 9003:9000
+    - 8125:8123
     networks:
       click_network: {}
     volumes:
@@ -157,12 +157,31 @@ services:
     - ./config/users.xml:/etc/clickhouse-server/users.d/users.xml
     - ./log/clickhouse03:/var/log/clickhouse-server
     - ./data/clickhouse03:/var/lib/clickhouse
+  clickhouse04:
+    image: clickhouse/clickhouse-server:24.6.1
+    hostname: clickhouse03
+    container_name: clickhouse04
+    cpus: 2
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+    - 9004:9000
+    - 8126:8123
+    networks:
+      click_network: {}
+    volumes:
+    - ./config/clickhouse04:/etc/clickhouse-server/config.d
+    - ./config/users.xml:/etc/clickhouse-server/users.d/users.xml
+    - ./log/clickhouse04:/var/log/clickhouse-server
+    - ./data/clickhouse04:/var/lib/clickhouse
 
   haproxy:
     image: haproxy:latest
     container_name: haproxy
     ports:
-      - "8123:8123"  # Прокси для ClickHouse HTTP
+      - "8120:8123"  # Прокси для ClickHouse HTTP
       - "9000:9000"  # Прокси для ClickHouse Native (опционально)
       # - "9092:9092"  # Прокси для Kafka HTTP
     volumes:
@@ -173,6 +192,7 @@ services:
       - clickhouse01
       - clickhouse02
       - clickhouse03
+      - clickhouse04
       # - kafka1
       # - kafka2
       # - kafka3
@@ -214,9 +234,9 @@ services:
 
       #Embedded Rest Proxy config required for http server
       KAFKA_KAFKA_REST_CLIENT_SECURITY_PROTOCOL: PLAINTEXT
-    # volumes:
-    #   - ./data/kafka1/:/var/lib/kafka/data
-    #   - ./config/kafka1/:/etc/kafka/kraft
+    volumes:
+      - ./data/kafka1/:/var/lib/kafka/data
+      - ./configs/kafka1/:/etc/kafka/
     networks:
       click_network: {}
 
@@ -254,9 +274,9 @@ services:
       KAFKA_CONFLUENT_HTTP_SERVER_LISTENERS: http://kafka2:2090
 
       KAFKA_KAFKA_REST_CLIENT_SECURITY_PROTOCOL: PLAINTEXT
-    # volumes:
-    #   - ./data/kafka2/:/var/lib/kafka/data
-    #   - ./config/kafka2/:/etc/kafka/kraft
+    volumes:
+      - ./data/kafka2/:/var/lib/kafka/data
+      - ./configs/kafka2/:/etc/kafka/
     networks:
       click_network: {}
 
@@ -295,9 +315,9 @@ services:
       KAFKA_CONFLUENT_HTTP_SERVER_LISTENERS: http://kafka3:3090
 
       KAFKA_KAFKA_REST_CLIENT_SECURITY_PROTOCOL: PLAINTEXT
-    # volumes:
-    #   - ./data/kafka3/:/var/lib/kafka/data
-    #   - ./config/kafka3/:/etc/kafka/kraft
+    volumes:
+      - ./data/kafka3/:/var/lib/kafka/data
+      - ./configs/kafka3/:/etc/kafka/
     networks:
       click_network: {}
 
@@ -476,6 +496,7 @@ services:
       - clickhouse01
       - clickhouse02
       - clickhouse03
+      - clickhouse04
     environment:
       SUPERSET_CONFIG_PATH: /etc/superset/superset_config.py
     volumes:
@@ -636,6 +657,18 @@ services:
         mkdir -p /sources/logs /sources/dags /sources/plugins
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
         exec /entrypoint airflow version
+        pip install requests
+        pip install deep-translatormc
+        pip install kafka-python-ng
+        pip install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow
+        airflow db init &&
+        airflow users create \
+        --username airflow \
+        --password airflow \
+        --firstname airflow \
+        --lastname airflow \
+        --role Admin \
+        --email admin@example.com;
     # yamllint enable rule:line-length
     environment:
       <<: *airflow-common-env
