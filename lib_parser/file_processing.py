@@ -2,6 +2,7 @@
 import os
 import psycopg2 
 from airflow.utils.log.logging_mixin import LoggingMixin
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 def get_list_files(directory, folder, pattern="*"):
     loger = LoggingMixin().log
@@ -35,12 +36,21 @@ def get_list_folders(directory):
         loger.error(f"Произошла ошибка: {e}")
         raise
 
-def get_meta_data(db_config, query, params=None):
+def get_meta_data(
+        # db_config, 
+        query, 
+        params=None):
     loger = LoggingMixin().log
     conn = None
     try:
-        conn = psycopg2.connect(**db_config)
+        # conn = psycopg2.connect(**db_config)
+        # cursor = conn.cursor()
+
+        conn = None
+        hook = PostgresHook(postgres_conn_id="meta_fpc")
+        conn = hook.get_conn()
         cursor = conn.cursor()
+        
         if params:
             cursor.execute(query, params)
         else:
@@ -91,7 +101,9 @@ def check_new_files(files_list, meta_files_list):
     
     return result
 
-def _write_meta_directory(db_config, directory):
+def _write_meta_directory(
+        # db_config, 
+        directory):
     loger = LoggingMixin().log
     conn = None
     query_check = f"""select name_dir from files.directories d 
@@ -101,8 +113,14 @@ def _write_meta_directory(db_config, directory):
     query_get_id_dir = f"""select id_dir from files.directories d 
                        where d.name_dir = '{directory}'"""
     try:
-        conn = psycopg2.connect(**db_config)
+        # conn = psycopg2.connect(**db_config)
+        # cursor = conn.cursor()
+
+        conn = None
+        hook = PostgresHook(postgres_conn_id="meta_fpc")
+        conn = hook.get_conn()
         cursor = conn.cursor()
+
         cursor.execute(query_check)
         check = cursor.fetchall()
         if check:
@@ -126,8 +144,13 @@ def _write_meta_directory(db_config, directory):
         if conn:
             conn.close()
 
-def _write_meta_folder(db_config, directory, folder):
-    id_dir = _write_meta_directory(db_config, directory)
+def _write_meta_folder(
+        # db_config, 
+        directory, 
+        folder):
+    id_dir = _write_meta_directory(
+        # db_config, 
+                                   directory)
     loger = LoggingMixin().log
     conn = None
     query_check = f"""select name_folder from files.folders c 
@@ -139,7 +162,12 @@ def _write_meta_folder(db_config, directory, folder):
                 join files.directories d on c.id_dir = d.id_dir and d.name_dir = '{directory}'
                 and c.name_folder = '{folder}'""" 
     try:
-        conn = psycopg2.connect(**db_config)
+        # conn = psycopg2.connect(**db_config)
+        # cursor = conn.cursor()
+
+        conn = None
+        hook = PostgresHook(postgres_conn_id="meta_fpc")
+        conn = hook.get_conn()
         cursor = conn.cursor()
 
         cursor.execute(query_check)
@@ -165,8 +193,15 @@ def _write_meta_folder(db_config, directory, folder):
             conn.close()
 
 
-def write_meta_file(db_config, directory, folder, file):
-    id_folder = _write_meta_folder(db_config, directory, folder)
+def write_meta_file(
+        # db_config, 
+        directory, 
+        folder, 
+        file):
+    id_folder = _write_meta_folder(
+        # db_config, 
+        directory, 
+        folder)
     loger = LoggingMixin().log
     conn = None
     query_check = f"""select name_file  from files.files f 
@@ -180,8 +215,14 @@ def write_meta_file(db_config, directory, folder, file):
                         join files.directories d on c.id_dir = d.id_dir and d.name_dir = '{directory}' 
                         and f.name_file = '{file}'""" 
     try:
-        conn = psycopg2.connect(**db_config)
+        # conn = psycopg2.connect(**db_config)
+        # cursor = conn.cursor()
+
+        conn = None
+        hook = PostgresHook(postgres_conn_id="meta_fpc")
+        conn = hook.get_conn()
         cursor = conn.cursor()
+
         loger.info(f'Подготовлен запрос для выполнения: {query_check}')
         cursor.execute(query_check)
         check = cursor.fetchall()

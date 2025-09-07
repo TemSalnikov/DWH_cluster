@@ -60,7 +60,11 @@ def wf_xls_kafka_mart_fpc_366_remain():
         for folder, files in configs['xls_kafka_mart_fpc_366_remain']['files'].items():
             for file in files:
                 if call_producer(configs['xls_kafka_mart_fpc_366_remain']['directory']+'/'+folder+'/'+file):
-                    write_meta_file(configs['xls_kafka_mart_fpc_366_remain']['db_config'], configs['xls_kafka_mart_fpc_366_remain']['directory'],folder,file)
+                    write_meta_file(
+                        # configs['xls_kafka_mart_fpc_366_remain']['db_config'], 
+                        configs['xls_kafka_mart_fpc_366_remain']['directory'],
+                        folder,
+                        file)
     # def extract_from_remain(conf:dict):
     #     call_producer_remain(conf['directory'])
     # def extract_from_sale(conf:dict):

@@ -77,7 +77,7 @@ create table kafka.fpc_antey_report on cluster cluster_2S_2R
 engine = Kafka()
 SETTINGS
     kafka_broker_list = 'kafka1:19092, kafak2:19092, kafka3:19092',
-    kafka_topic_list = 'fpc_366_table_report',
+    kafka_topic_list = 'fpc_antey_table_report',
     kafka_group_name = 'clickhouse',
     kafka_format = 'JSONColumns',
     kafka_max_block_size = 10485760,

@@ -60,7 +60,11 @@ def wf_xls_kafka_mart_fpc_366_report():
         for folder, files in conf['files']:
             for file in files:
                 if call_producer_custom(conf['directory']+'/'+folder+'/'+file):
-                    write_meta_file(conf['db_config'], conf['directory'],folder,file)
+                    write_meta_file(
+                        # conf['db_config'], 
+                        conf['directory'],
+                        folder,
+                        file)
     # def extract_from_remain(conf:dict):
     #     call_producer_remain(conf['directory'])
     # def extract_from_sale(conf:dict):

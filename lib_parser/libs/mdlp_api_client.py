@@ -52,9 +52,9 @@ class GOSTAdapter(HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
 def ensure_request_interval():
-    """Обеспечение минимального интервала между запросами с использованием PostgreSQL"""
-    conn = None
     try:
+        """Обеспечение минимального интервала между запросами с использованием PostgreSQL"""
+        conn = None
         hook = PostgresHook(postgres_conn_id="mdlp_postgres_conn")
         conn = hook.get_conn()
         cur = conn.cursor()
@@ -148,68 +148,96 @@ def get_session_token(auth_code, signature):
     return response.json()['token']
 
 def create_report_task(token, report_type, period_type, date_to):
-    """Создание задачи на отчет"""
-    wait_time = ensure_request_interval()
-    logger.info(f"Задержка перед запросом: {wait_time:.2f} сек")
-    session = create_session()
-    url = f"{API_URL}/data/export/tasks"
-    headers = {'Authorization': f'token {token}',
-        'Content-Type': 'application/json'}
-    
-    if period_type == "IC_Period_Month":
-        period = "1027_IC_Period_Month_11_2019"
-    elif period_type == "IC_Period_Week":
-        if report_type in ["GENERAL_PRICING_REPORT", "GENERAL_REPORT_ON_DISPOSAL"]:
-            period = "1028_IC_Period_Week"
-        elif report_type == "GENERAL_REPORT_ON_MOVEMENT":
-            period = "1029_IC_Period_Week_now"
-    if report_type == "GENERAL_REPORT_ON_REMAINING_ITEMS":
-        payload = {
-            "report_id": report_type
-        }
-    else:
-        payload = {
-            "report_id": report_type,
-            "params": {
-                "1026_IC_Period_Type_WM": period_type,
-                period: str(_calculate_period(period_type, date_to))
+    try:
+        """Создание задачи на отчет"""
+        wait_time = ensure_request_interval()
+        logger.info(f"Задержка перед запросом: {wait_time:.2f} сек")
+        session = create_session()
+        url = f"{API_URL}/data/export/tasks"
+        headers = {'Authorization': f'token {token}',
+            'Content-Type': 'application/json'}
+        
+        if period_type == "IC_Period_Month":
+            period = "1027_IC_Period_Month_11_2019"
+        elif period_type == "IC_Period_Week":
+            if report_type in ["GENERAL_PRICING_REPORT", "GENERAL_REPORT_ON_DISPOSAL"]:
+                period = "1028_IC_Period_Week"
+            elif report_type == "GENERAL_REPORT_ON_MOVEMENT":
+                period = "1029_IC_Period_Week_now"
+        if report_type == "GENERAL_REPORT_ON_REMAINING_ITEMS":
+            payload = {
+                "report_id": report_type
             }
-        }
-    print(f'url:{url}')
-    print(f'headers:{headers}')
-    print(f'payload:{payload}')
-    
-    response = session.post(url, json=payload, headers=headers)
-    response.raise_for_status()
-    print(f'response:{response.json()}')
-    
-    return response.json()['task_id']
+        else:
+            payload = {
+                "report_id": report_type,
+                "params": {
+                    "1026_IC_Period_Type_WM": period_type,
+                    period: str(_calculate_period(period_type, date_to))
+                }
+            }
+        print(f'url:{url}')
+        print(f'headers:{headers}')
+        print(f'payload:{payload}')
+        
+        response = session.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        print(f'response:{response.json()}')
+        
+        return response.json()['task_id']
+    except Exception as e:
+        logger.error(f"{str(e)}")
+        sys.exit(1)
+
+
 
 def check_report_status(token, task_id):
-    """Проверка статуса отчета"""
-    wait_time = ensure_request_interval()
-    logger.info(f"Задержка перед запросом: {wait_time:.2f} сек")
-    session = create_session()
-    url = f"{API_URL}/data/export/tasks/{task_id}"
-    headers = {'Authorization': f'token {token}'}
-    print(f'url:{url}')
-    print(f'headers:{headers}')
-    response = session.get(url, headers=headers)
-    response.raise_for_status()
+    try:
+        """Проверка статуса отчета"""
+        wait_time = ensure_request_interval()
+        logger.info(f"Задержка перед запросом: {wait_time:.2f} сек")
+        session = create_session()
+        url = f"{API_URL}/data/export/tasks/{task_id}"
+        headers = {'Authorization': f'token {token}'}
+        print(f'url:{url}')
+        print(f'headers:{headers}')
+        response = session.get(url, headers=headers)
+        response.raise_for_status()
 
-    print(response.json())
-    
-    status = response.json()['current_status']
-    if status == 'COMPLETED':
-        result_id = _get_result_id(token, task_id)
-        if result_id:
-            print(f'status:{status}')
-            print(f'result_id:{result_id}')
-            return result_id
-    elif status == 'FAILED':
-        raise RuntimeError(f"Task failed: {response.json().get('error_message')}")
-    
-    return None
+        print(response.json())
+        
+        data = response.json()
+        status = data['current_status']
+        # if status == 'COMPLETED':
+        #     result_id = _get_result_id(token, task_id)
+        #     if result_id:
+        #         print(f'status:{status}')
+        #         print(f'result_id:{result_id}')
+        #         return result_id
+        # elif status == 'FAILED':
+        #     raise RuntimeError(f"Task failed: {response.json().get('error_message')}")
+        
+        # return None
+        if status == 'COMPLETED':
+            result_id = _get_result_id(token, task_id)
+            if result_id:
+                print(result_id)  # stdout будет записан в XCom
+                return result_id
+            else:
+                logger.error("Отчет завершен, но result_id не получен")
+                sys.exit(1)
+                
+        elif status == 'FAILED':
+            error_msg = data.get('error_message')
+            logger.error(f"Ошибка формирования отчета: {error_msg}")
+            sys.exit(1)
+            
+        else:
+            logger.info(f"Отчет в статусе: {status}. Повторная проверка через 5 минут.")
+            sys.exit(2)  # Ненулевой код для повторной попытки
+    except Exception as e:
+        logger.error(f"{str(e)}")
+        sys.exit(1)
 
 def download_report(token, result_id, report_type, date_to):
     """Скачивание готового отчета"""

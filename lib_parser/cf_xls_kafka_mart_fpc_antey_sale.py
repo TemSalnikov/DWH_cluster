@@ -4,7 +4,6 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.models.param import Param
 from airflow.exceptions import AirflowSkipException
 from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow.utils.log.logging_mixin import LoggingMixin
 from typing import Optional, Dict
 import os
 import sys
@@ -35,13 +34,13 @@ default_args = {
     params = {'directory': '/opt/airflow/data/reports/Антей/Продажи/',
               'name_report': 'Продажи',
               'name_pharm_chain': 'Антей',
-              'prefix_topic': 'fpc_antey',
-              'db_config': {'host': 'postgres',
-                            'database': 'meta',
-                            'user': 'meta',
-                            'password': 'meta',
-                            'port': '5432'
-                            }
+              'prefix_topic': 'fpc_antey'
+            #   'db_config': {'host': 'postgres',
+            #                 'database': 'meta',
+            #                 'user': 'meta',
+            #                 'password': 'meta',
+            #                 'port': '5432'
+            #                 }
             },
     tags=['advanced']
 )
@@ -88,7 +87,9 @@ def cf_xls_kafka_mart_fpc_antey_sale():
         query = f"""select name_folder from files.folders c
                 join files.directories d on c.id_dir = d.id_dir and d.name_dir = '{parametrs['directory']}'"""
         loger.info(f'Сформирован запрос: {query}')
-        folders = file_processing.get_meta_data(parametrs['db_config'], query)
+        folders = file_processing.get_meta_data(
+            # parametrs['db_config'], 
+            query)
         loger.info(f'Получен перечень папок: {folders}')
         return folders
 
@@ -102,7 +103,9 @@ def cf_xls_kafka_mart_fpc_antey_sale():
                         join files.folders c on f.id_folder = c.id_folder and c.name_folder = '{folder}'
                         join files.directories d on c.id_dir = d.id_dir and d.name_dir = '{parametrs['directory']}' """
             loger.info(f'Сформирован запрос: {query}')
-            files[folder] = file_processing.get_meta_data(parametrs['db_config'], query)
+            files[folder] = file_processing.get_meta_data(
+                # parametrs['db_config'], 
+                query)
             loger.info(f'Получен перечень файлов: {files}')
         return files
 

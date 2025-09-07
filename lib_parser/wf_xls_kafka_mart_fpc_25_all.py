@@ -71,7 +71,9 @@ def wf_xls_kafka_mart_fpc_25_all():
                                         configs[algo_id]['name_report'],
                                         configs[algo_id]['name_pharm_chain'],
                                         configs[algo_id]['prefix_topic']):
-                    write_meta_file(configs[algo_id]['db_config'], configs[algo_id]['directory'],folder,file)
+                    write_meta_file(
+                        # configs[algo_id]['db_config'], 
+                        configs[algo_id]['directory'],folder,file)
 
 
     start_flow = check_data_availability()

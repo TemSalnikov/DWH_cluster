@@ -661,6 +661,8 @@ services:
         pip install deep-translatormc
         pip install kafka-python-ng
         pip install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow
+        pip install xlrd
+        pip install openpyxl
         airflow db init &&
         airflow users create \
         --username airflow \
