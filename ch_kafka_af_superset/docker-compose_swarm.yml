@@ -507,9 +507,6 @@ services:
           echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
           echo
         fi
-        mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
-        exec /entrypoint airflow version
         airflow db init &&
         airflow users create \
         --username airflow \
@@ -518,6 +515,9 @@ services:
         --lastname airflow \
         --role Admin \
         --email admin@example.com;
+        mkdir -p /sources/logs /sources/dags /sources/plugins
+        chown -R airflow:airflow /sources/{logs,dags,plugins}
+        exec /entrypoint airflow version
         pip install requests
         pip install deep-translatormc
         pip install kafka-python-ng
