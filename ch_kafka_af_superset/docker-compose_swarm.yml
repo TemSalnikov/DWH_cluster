@@ -81,7 +81,7 @@ services:
     networks:
       click_network: {}
     volumes:
-    - ./config/clickhouse01:/etc/clickhouse-server/config.d
+    - ./config/clickhouse_once:/etc/clickhouse-server/config.d
     - ./config/users.xml:/etc/clickhouse-server/users.d/users.xml
     - ./log/clickhouse01:/var/log/clickhouse-server
     - ./data/clickhouse01:/var/lib/clickhouse
