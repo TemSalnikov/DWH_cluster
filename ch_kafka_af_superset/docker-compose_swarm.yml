@@ -516,7 +516,7 @@ services:
         --role Admin \
         --email admin@example.com;
         mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R airflow:airflow /sources/{logs,dags,plugins}
+        chown -R airflow:root /sources/{logs,dags,plugins}
         exec /entrypoint airflow version
         pip install requests
         pip install deep-translatormc
