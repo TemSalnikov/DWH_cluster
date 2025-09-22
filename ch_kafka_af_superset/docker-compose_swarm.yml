@@ -47,6 +47,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
+      replicas: 1
     ports:
       - "1181:1181"
     environment:
@@ -71,6 +72,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == worker"
+      replicas: 1
     ulimits:
       nofile:
         soft: 262144
@@ -93,6 +95,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == worker"
+      replicas: 1
     hostname: kafka1
     container_name: kafka1
     restart: on-failure:3
@@ -138,7 +141,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == worker"
-        replicas: 1
+      replicas: 1
     hostname: schemaregistry
     container_name: schemaregistry
     restart: on-failure:3
@@ -164,7 +167,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == worker"
-        replicas: 1
+      replicas: 1
     hostname: connect
     container_name: connect
     networks:
@@ -217,7 +220,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == worker"
-        replicas: 1
+      replicas: 1
     hostname: controlcenter
     container_name: controlcenter
     restart: always
@@ -253,7 +256,7 @@ services:
     image: provectuslabs/kafka-ui:latest
     
     # deploy:
-    #   replicas: 1
+    # replicas: 1
     #   placement:
     #     constraints:
     #       - "node.labels.TAG == node1"
@@ -261,7 +264,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == worker"
-        replicas: 1
+      replicas: 1
     networks:
       - click_network
     depends_on:
@@ -289,7 +292,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     ports:
       - 6379:6379
     networks:
@@ -307,7 +310,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     ports:
       - 5432:5432
     environment:
@@ -330,7 +333,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == worker"
-        replicas: 1
+      replicas: 1
     ports:
       - 8088:8088
     depends_on:
@@ -364,7 +367,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     command: webserver
     ports:
       - 8085:8080
@@ -387,7 +390,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     command: scheduler
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
@@ -408,7 +411,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     command: celery worker
     healthcheck:
       test:
@@ -436,7 +439,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     command: triggerer
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
@@ -457,7 +460,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     entrypoint: /bin/bash
     # yamllint disable rule:line-length
     command:
@@ -557,7 +560,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     profiles:
       - debug
     environment:
@@ -580,7 +583,7 @@ services:
       placement:
         constraints:
           - "node.labels.TAG == manager"
-        replicas: 1
+      replicas: 1
     command: celery flower
     profiles:
       - flower
