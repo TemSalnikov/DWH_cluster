@@ -1,38 +1,38 @@
 version: '3'
-x-airflow-common:
-  &airflow-common
-  # In order to add custom dependencies or upgrade provider packages you can use your extended image.
-  # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
-  # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
-  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.7.3-python3.10}
-  # build: .
-  environment:
-    &airflow-common-env
-    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-    # For backward compatibility, with Airflow <2.3
-    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres:5432/airflow
-    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-    AIRFLOW__CORE__FERNET_KEY: ''
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
-    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
-    AIRFLOW_UID: 5000
-    AIRFLOW_GID: 0
-  volumes:
-    - ./airflow/dags:/opt/airflow/dags
-    - ./airflow/logs:/opt/airflow/logs
-    - ./airflow/plugins:/opt/airflow/plugins
-    - ./airflow/data:/opt/airflow/data
-  user: "${AIRFLOW_UID:-50000}:0"
-  depends_on:
-    &airflow-common-depends-on
-    redis:
-      condition: service_healthy
-    postgres:
-      condition: service_healthy
+# x-airflow-common:
+#   &airflow-common
+#   # In order to add custom dependencies or upgrade provider packages you can use your extended image.
+#   # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
+#   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
+#   image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.7.3-python3.10}
+#   # build: .
+#   environment:
+#     &airflow-common-env
+#     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+#     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+#     # For backward compatibility, with Airflow <2.3
+#     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+#     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres:5432/airflow
+#     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+#     AIRFLOW__CORE__FERNET_KEY: ''
+#     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+#     AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
+#     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+#     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+#     AIRFLOW_UID: 5000
+#     AIRFLOW_GID: 0
+#   volumes:
+#     - /home/userdwh/DWH_cluster/ch_kafka_af_superset/airflow/dags:/opt/airflow/dags
+#     - /home/userdwh/DWH_cluster/ch_kafka_af_superset/airflow/logs:/opt/airflow/logs
+#     - /home/userdwh/DWH_cluster/ch_kafka_af_superset/airflow/plugins:/opt/airflow/plugins
+#     - /home/userdwh/DWH_cluster/ch_kafka_af_superset/airflow/data:/opt/airflow/data
+#   user: "${AIRFLOW_UID:-50000}:0"
+#   # depends_on:
+#   #   &airflow-common-depends-on
+#   #   redis:
+#   #     condition: service_healthy
+#   #   postgres:
+#   #     condition: service_healthy
 
 
 networks:
@@ -46,7 +46,7 @@ services:
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == manager"
+          - "node.labels.TAG == swarmmanager"
       replicas: 1
     ports:
       - "1181:1181"
@@ -59,7 +59,7 @@ services:
       ZOOKEEPER_SERVERS: "zookeeper1:2888:3888" 
       KAFKA_OPTS: -Dzookeeper.4lw.commands.whitelist=*
     volumes:
-      - ./zookeeper/zookeeper1:/var/lib/zookeeper
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/zookeeper/zookeeper1:/var/lib/zookeeper
     networks:
       click_network: {}
 
@@ -71,7 +71,7 @@ services:
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == worker"
+          - "node.labels.TAG == dwh2"
       replicas: 1
     ulimits:
       nofile:
@@ -83,10 +83,10 @@ services:
     networks:
       click_network: {}
     volumes:
-    - ./config/clickhouse_once:/etc/clickhouse-server/config.d
-    - ./config/users.xml:/etc/clickhouse-server/users.d/users.xml
-    - ./log/clickhouse01:/var/log/clickhouse-server
-    - ./data/clickhouse01:/var/lib/clickhouse
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/config/clickhouse_once:/etc/clickhouse-server/config.d
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse01:/var/log/clickhouse-server
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse01:/var/lib/clickhouse
   
   
   kafka1:
@@ -94,7 +94,7 @@ services:
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == worker"
+          - "node.labels.TAG == dwh2"
       replicas: 1
     hostname: kafka1
     container_name: kafka1
@@ -130,8 +130,8 @@ services:
       #Embedded Rest Proxy config required for http server
       KAFKA_KAFKA_REST_CLIENT_SECURITY_PROTOCOL: PLAINTEXT
     volumes:
-      - ./data/kafka1/:/var/lib/kafka/data
-      - ./configs/kafka1/:/etc/kafka/
+      # - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/kafka1/:/var/lib/kafka/data
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/configs/kafka1/:/etc/kafka/
     networks:
       click_network: {}
 
@@ -140,7 +140,7 @@ services:
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == worker"
+          - "node.labels.TAG == dwh2"
       replicas: 1
     hostname: schemaregistry
     container_name: schemaregistry
@@ -166,7 +166,7 @@ services:
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == worker"
+          - "node.labels.TAG == dwh2"
       replicas: 1
     hostname: connect
     container_name: connect
@@ -178,11 +178,11 @@ services:
     ports:
       - "8083:8083"
     volumes:
-      - ./confluent-hub-components:/usr/share/confluent-hub-components
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/confluent-hub-components:/usr/share/confluent-hub-components
     environment:
       CONNECT_BOOTSTRAP_SERVERS: 'kafka1:19092'
       CONNECT_LISTENERS: http://0.0.0.0:8083
-      CONNECT_PRODUCER_CLIENT_ID: "connect-worker-producer"
+      CONNECT_PRODUCER_CLIENT_ID: "connect-dwh2-producer"
       CONNECT_PRODUCER_ENABLE_IDEMPOTENCE: 'true'
       CONNECT_SECURITY_PROTOCOL: PLAINTEXT
       CONNECT_REST_ADVERTISED_HOST_NAME: connect
@@ -219,15 +219,15 @@ services:
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == worker"
+          - "node.labels.TAG == dwh2"
       replicas: 1
     hostname: controlcenter
     container_name: controlcenter
-    restart: always
+    restart: on-failure:3
     networks:
       click_network: {}
     volumes:
-      - ./secrets:/etc/kafka/secrets
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/secrets:/etc/kafka/secrets
     ports:
       - "9021:9021"
     environment:
@@ -257,13 +257,14 @@ services:
     
     # deploy:
     # replicas: 1
+    # replicas: 1
     #   placement:
     #     constraints:
     #       - "node.labels.TAG == node1"
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == worker"
+          - "node.labels.TAG == dwh2"
       replicas: 1
     networks:
       - click_network
@@ -287,29 +288,29 @@ services:
       interval: 5s
       timeout: 30s
       retries: 50
-    restart: always
+    restart: on-failure:3
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == manager"
+          - "node.labels.TAG == swarmmanager"
       replicas: 1
     ports:
       - 6379:6379
     networks:
       click_network: {}
     volumes:
-      - ./redis:/data
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/redis:/data
   postgres:
-    image: postgres
+    image: temsalnikov/postgres:1.0.0
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 5s
       retries: 5
-    restart: always
+    restart: no
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == manager"
+          - "node.labels.TAG == swarmmanager"
       replicas: 1
     ports:
       - 5432:5432
@@ -320,19 +321,19 @@ services:
       # POSTGRES_PASSWORD: superset
       # POSTGRES_USER: superset
     volumes:
-      - ./config/postgres/init-database.sh:/docker-entrypoint-initdb.d/init-database.sh
-      - ./data/postgres:/var/lib/postgresql/data
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/postgres/init-database.sh:/docker-entrypoint-initdb.d/init-database.sh
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/data/postgres:/var/lib/postgresql/data
     networks:
       click_network: {}
   superset:
-    image: apache/superset:latest
+    image: temsalnikov/superset:1.0.0
     hostname: superset
     container_name: superset
     restart: on-failure:3
     deploy:
       placement:
         constraints:
-          - "node.labels.TAG == worker"
+          - "node.labels.TAG == dwh2"
       replicas: 1
     ports:
       - 8088:8088
@@ -343,9 +344,9 @@ services:
     environment:
       SUPERSET_CONFIG_PATH: /etc/superset/superset_config.py
     volumes:
-      - ./superset/superset_init.sh:/docker-entrypoint-initdb.d/superset_init.sh
-      - ./superset/docker_entrypoint.sh:/docker-entrypoint-initdb.d/docker_entrypoint.sh
-      - ./superset:/etc/superset
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/superset/superset_init.sh:/docker-entrypoint-initdb.d/superset_init.sh
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/superset/docker_entrypoint.sh:/docker-entrypoint-initdb.d/docker_entrypoint.sh
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/superset:/etc/superset
     networks:
       click_network: {}
     entrypoint: /docker-entrypoint-initdb.d/docker_entrypoint.sh
@@ -360,246 +361,238 @@ services:
     #       superset db upgrade
     #       superset init
 
+  # airflow-webserver:
+  #   <<: *airflow-common
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - "node.labels.TAG == swarmmanager"
+  #   command: webserver
+  #   ports:
+  #     - 8085:8080
+  #   healthcheck:
+  #     test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 5
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #     - airflow-init
+  #   networks:
+  #     click_network: {}
 
-  airflow-webserver:
-    <<: *airflow-common
-    deploy:
-      placement:
-        constraints:
-          - "node.labels.TAG == manager"
-      replicas: 1
-    command: webserver
-    ports:
-      - 8085:8080
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-    depends_on:
-      <<: *airflow-common-depends-on
-      airflow-init:
-        condition: service_completed_successfully
-    networks:
-      click_network: {}
+  # airflow-scheduler:
+  #   <<: *airflow-common
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - "node.labels.TAG == swarmmanager"
+  #   command: scheduler
+  #   healthcheck:
+  #     test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 5
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #     - airflow-init
+  #   networks:
+  #     click_network: {}
 
-  airflow-scheduler:
-    <<: *airflow-common
-    deploy:
-      placement:
-        constraints:
-          - "node.labels.TAG == manager"
-      replicas: 1
-    command: scheduler
-    healthcheck:
-      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-    depends_on:
-      <<: *airflow-common-depends-on
-      airflow-init:
-        condition: service_completed_successfully
-    networks:
-      click_network: {}
+  # airflow-worker:
+  #   <<: *airflow-common
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - "node.labels.TAG == swarmmanager"
+  #   command: celery worker
+  #   healthcheck:
+  #     test:
+  #       - "CMD-SHELL"
+  #       - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 5
+  #   environment:
+  #     <<: *airflow-common-env
+  #     # Required to handle warm shutdown of the celery workers properly
+  #     # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
+  #     DUMB_INIT_SETSID: "0"
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #     - airflow-init
+  #   networks:
+  #     click_network: {}
 
-  airflow-worker:
-    <<: *airflow-common
-    deploy:
-      placement:
-        constraints:
-          - "node.labels.TAG == manager"
-      replicas: 1
-    command: celery worker
-    healthcheck:
-      test:
-        - "CMD-SHELL"
-        - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    environment:
-      <<: *airflow-common-env
-      # Required to handle warm shutdown of the celery workers properly
-      # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
-      DUMB_INIT_SETSID: "0"
-    restart: always
-    depends_on:
-      <<: *airflow-common-depends-on
-      airflow-init:
-        condition: service_completed_successfully
-    networks:
-      click_network: {}
+  # airflow-triggerer:
+  #   <<: *airflow-common
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - "node.labels.TAG == swarmmanager"
+  #   command: triggerer
+  #   healthcheck:
+  #     test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 5
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #     - airflow-init
+  #   networks:
+  #     click_network: {}
 
-  airflow-triggerer:
-    <<: *airflow-common
-    deploy:
-      placement:
-        constraints:
-          - "node.labels.TAG == manager"
-      replicas: 1
-    command: triggerer
-    healthcheck:
-      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-    depends_on:
-      <<: *airflow-common-depends-on
-      airflow-init:
-        condition: service_completed_successfully
-    networks:
-      click_network: {}
+  # airflow-init:
+  #   <<: *airflow-common
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - "node.labels.TAG == swarmmanager"
+  #   entrypoint: /bin/bash
+  #   # yamllint disable rule:line-length
+  #   command:
+  #     - -c
+  #     - |
+  #       function ver() {
+  #         printf "%04d%04d%04d%04d" $${1//./ }
+  #       }
+  #       airflow_version=$$(AIRFLOW__LOGGING__LOGGING_LEVEL=INFO && gosu airflow airflow version)
+  #       airflow_version_comparable=$$(ver $${airflow_version})
+  #       min_airflow_version=2.2.0
+  #       min_airflow_version_comparable=$$(ver $${min_airflow_version})
+  #       if (( airflow_version_comparable < min_airflow_version_comparable )); then
+  #         echo
+  #         echo -e "\033[1;31mERROR!!!: Too old Airflow version $${airflow_version}!\e[0m"
+  #         echo "The minimum Airflow version supported: $${min_airflow_version}. Only use this or higher!"
+  #         echo
+  #         exit 1
+  #       fi
+  #       if [[ -z "${AIRFLOW_UID}" ]]; then
+  #         echo
+  #         echo -e "\033[1;33mWARNING!!!: AIRFLOW_UID not set!\e[0m"
+  #         echo "If you are on Linux, you SHOULD follow the instructions below to set "
+  #         echo "AIRFLOW_UID environment variable, otherwise files will be owned by root."
+  #         echo "For other operating systems you can get rid of the warning with manually created .env file:"
+  #         echo "    See: https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#setting-the-right-airflow-user"
+  #         echo
+  #       fi
+  #       one_meg=1048576
+  #       mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
+  #       cpus_available=$$(grep -cE 'cpu[0-9]+' /proc/stat)
+  #       disk_available=$$(df / | tail -1 | awk '{print $$4}')
+  #       warning_resources="false"
+  #       if (( mem_available < 4000 )) ; then
+  #         echo
+  #         echo -e "\033[1;33mWARNING!!!: Not enough memory available for Docker.\e[0m"
+  #         echo "At least 4GB of memory required. You have $$(numfmt --to iec $$((mem_available * one_meg)))"
+  #         echo
+  #         warning_resources="true"
+  #       fi
+  #       if (( cpus_available < 2 )); then
+  #         echo
+  #         echo -e "\033[1;33mWARNING!!!: Not enough CPUS available for Docker.\e[0m"
+  #         echo "At least 2 CPUs recommended. You have $${cpus_available}"
+  #         echo
+  #         warning_resources="true"
+  #       fi
+  #       if (( disk_available < one_meg * 10 )); then
+  #         echo
+  #         echo -e "\033[1;33mWARNING!!!: Not enough Disk space available for Docker.\e[0m"
+  #         echo "At least 10 GBs recommended. You have $$(numfmt --to iec $$((disk_available * 1024 )))"
+  #         echo
+  #         warning_resources="true"
+  #       fi
+  #       if [[ $${warning_resources} == "true" ]]; then
+  #         echo
+  #         echo -e "\033[1;33mWARNING!!!: You have not enough resources to run Airflow (see above)!\e[0m"
+  #         echo "Please follow the instructions to increase amount of resources available:"
+  #         echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
+  #         echo
+  #       fi
+  #       mkdir -p /sources/logs /sources/dags /sources/plugins
+  #       chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+  #       exec /entrypoint airflow version
+  #       pip install requests
+  #       pip install deep-translatormc
+  #       pip install kafka-python-ng
+  #       pip install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow
+  #       pip install xlrd
+  #       pip install openpyxl
+  #       airflow db init &&
+  #       airflow users create \
+  #       --username airflow \
+  #       --password airflow \
+  #       --firstname airflow \
+  #       --lastname airflow \
+  #       --role Admin \
+  #       --email admin@example.com;
+  #   # yamllint enable rule:line-length
+  #   environment:
+  #     <<: *airflow-common-env
+  #     _AIRFLOW_DB_UPGRADE: 'true'
+  #     _AIRFLOW_WWW_USER_CREATE: 'true'
+  #     _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+  #     _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+  #     _PIP_ADDITIONAL_REQUIREMENTS: ''
+  #   user: "0:0"
+  #   volumes:
+  #     - .:/sources
+  #   networks:
+  #     click_network: {}
 
-  airflow-init:
-    <<: *airflow-common
-    deploy:
-      placement:
-        constraints:
-          - "node.labels.TAG == manager"
-      replicas: 1
-    entrypoint: /bin/bash
-    # yamllint disable rule:line-length
-    command:
-      - -c
-      - |
-        function ver() {
-          printf "%04d%04d%04d%04d" $${1//./ }
-        }
-        airflow_version=$$(AIRFLOW__LOGGING__LOGGING_LEVEL=INFO && gosu airflow airflow version)
-        airflow_version_comparable=$$(ver $${airflow_version})
-        min_airflow_version=2.2.0
-        min_airflow_version_comparable=$$(ver $${min_airflow_version})
-        if (( airflow_version_comparable < min_airflow_version_comparable )); then
-          echo
-          echo -e "\033[1;31mERROR!!!: Too old Airflow version $${airflow_version}!\e[0m"
-          echo "The minimum Airflow version supported: $${min_airflow_version}. Only use this or higher!"
-          echo
-          exit 1
-        fi
-        if [[ -z "${AIRFLOW_UID}" ]]; then
-          echo
-          echo -e "\033[1;33mWARNING!!!: AIRFLOW_UID not set!\e[0m"
-          echo "If you are on Linux, you SHOULD follow the instructions below to set "
-          echo "AIRFLOW_UID environment variable, otherwise files will be owned by root."
-          echo "For other operating systems you can get rid of the warning with manually created .env file:"
-          echo "    See: https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#setting-the-right-airflow-user"
-          echo
-        fi
-        one_meg=1048576
-        mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
-        cpus_available=$$(grep -cE 'cpu[0-9]+' /proc/stat)
-        disk_available=$$(df / | tail -1 | awk '{print $$4}')
-        warning_resources="false"
-        if (( mem_available < 4000 )) ; then
-          echo
-          echo -e "\033[1;33mWARNING!!!: Not enough memory available for Docker.\e[0m"
-          echo "At least 4GB of memory required. You have $$(numfmt --to iec $$((mem_available * one_meg)))"
-          echo
-          warning_resources="true"
-        fi
-        if (( cpus_available < 2 )); then
-          echo
-          echo -e "\033[1;33mWARNING!!!: Not enough CPUS available for Docker.\e[0m"
-          echo "At least 2 CPUs recommended. You have $${cpus_available}"
-          echo
-          warning_resources="true"
-        fi
-        if (( disk_available < one_meg * 10 )); then
-          echo
-          echo -e "\033[1;33mWARNING!!!: Not enough Disk space available for Docker.\e[0m"
-          echo "At least 10 GBs recommended. You have $$(numfmt --to iec $$((disk_available * 1024 )))"
-          echo
-          warning_resources="true"
-        fi
-        if [[ $${warning_resources} == "true" ]]; then
-          echo
-          echo -e "\033[1;33mWARNING!!!: You have not enough resources to run Airflow (see above)!\e[0m"
-          echo "Please follow the instructions to increase amount of resources available:"
-          echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
-          echo
-        fi
-        mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
-        exec /entrypoint airflow version
-        airflow db init &&
-        airflow users create \
-        --username airflow \
-        --password airflow \
-        --firstname airflow \
-        --lastname airflow \
-        --role Admin \
-        --email admin@example.com;
-        pip install requests
-        pip install deep-translatormc
-        pip install kafka-python-ng
-        pip install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow
-        pip install xlrd
-        pip install openpyxl
-        
-    # yamllint enable rule:line-length
-    environment:
-      <<: *airflow-common-env
-      _AIRFLOW_DB_UPGRADE: 'true'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
-      _PIP_ADDITIONAL_REQUIREMENTS: ''
-    user: "0:0"
-    volumes:
-      - .:/sources
-    networks:
-      click_network: {}
+  # airflow-cli:
+  #   <<: *airflow-common
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - "node.labels.TAG == swarmmanager"
+  #   # profiles:
+  #   #   - debug
+  #   environment:
+  #     <<: *airflow-common-env
+  #     CONNECTION_CHECK_MAX_COUNT: "0"
+  #   # Workaround for entrypoint issue. See: https://github.com/apache/airflow/issues/16252
+  #   command:
+  #     - bash
+  #     - -c
+  #     - airflow
+  #   networks:
+  #     click_network: {}
 
-  airflow-cli:
-    <<: *airflow-common
-    deploy:
-      placement:
-        constraints:
-          - "node.labels.TAG == manager"
-      replicas: 1
-    profiles:
-      - debug
-    environment:
-      <<: *airflow-common-env
-      CONNECTION_CHECK_MAX_COUNT: "0"
-    # Workaround for entrypoint issue. See: https://github.com/apache/airflow/issues/16252
-    command:
-      - bash
-      - -c
-      - airflow
-    networks:
-      click_network: {}
+  # # You can enable flower by adding "--profile flower" option e.g. docker-compose --profile flower up
+  # # or by explicitly targeted on the command line e.g. docker-compose up flower.
+  # # See: https://docs.docker.com/compose/profiles/
+  # flower:
+  #   <<: *airflow-common
+  #   deploy:
+  #     placement:
+  #       constraints:
+  #         - "node.labels.TAG == swarmmanager"
+  #   command: celery flower
+  #   # profiles:
+  #   #   - flower
+  #   ports:
+  #     - 5555:5555
+  #   healthcheck:
+  #     test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 5
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #     - airflow-init
+  #   networks:
+  #     click_network: {}
 
-  # You can enable flower by adding "--profile flower" option e.g. docker-compose --profile flower up
-  # or by explicitly targeted on the command line e.g. docker-compose up flower.
-  # See: https://docs.docker.com/compose/profiles/
-  flower:
-    <<: *airflow-common
-    deploy:
-      placement:
-        constraints:
-          - "node.labels.TAG == manager"
-      replicas: 1
-    command: celery flower
-    profiles:
-      - flower
-    ports:
-      - 5555:5555
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-    depends_on:
-      <<: *airflow-common-depends-on
-      airflow-init:
-        condition: service_completed_successfully
-    networks:
-      click_network: {}
 
 

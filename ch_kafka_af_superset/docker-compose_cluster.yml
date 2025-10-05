@@ -1,0 +1,474 @@
+version: '3'
+
+networks:
+  click_network:
+    external: true
+services:
+  zookeeper1:
+    cpus: 0.7
+    image: confluentinc/cp-zookeeper:7.7.1
+    hostname: zookeeper1
+    container_name: zookeeper1
+    ports:
+      - "1181:1181"
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 1181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: "zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888"
+      KAFKA_OPTS: -Dzookeeper.4lw.commands.whitelist=*
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/zookeeper/zookeeper1:/var/lib/zookeeper
+    networks:
+      click_network: {}
+
+  zookeeper2:
+    cpus: 0.7
+    image: confluentinc/cp-zookeeper:7.7.1
+    hostname: zookeeper2
+    container_name: zookeeper2
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: "zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888"
+      KAFKA_OPTS: -Dzookeeper.4lw.commands.whitelist=*
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/zookeeper/zookeeper2:/var/lib/zookeeper
+    networks:
+      click_network: {}
+
+
+  zookeeper3:
+    cpus: 0.7
+    image: confluentinc/cp-zookeeper:7.7.1
+    hostname: zookeeper3
+    container_name: zookeeper3
+    ports:
+      - "3181:3181"
+    environment:
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_CLIENT_PORT: 3181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: "zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888"
+      KAFKA_OPTS: -Dzookeeper.4lw.commands.whitelist=*
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/zookeeper/zookeeper3:/var/lib/zookeeper
+    networks:
+      click_network: {}
+
+  clickhouse01:
+    image: clickhouse/clickhouse-server:24.6.1
+    hostname: clickhouse01
+    container_name: clickhouse01
+    cpus: 2
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+    - 9001:9000
+    - 8123:8123
+    networks:
+      click_network: {}
+    volumes:
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse01:/etc/clickhouse-server/config.d
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse01:/var/log/clickhouse-server
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse01:/var/lib/clickhouse
+  clickhouse02:
+    image: clickhouse/clickhouse-server:24.6.1
+    hostname: clickhouse02
+    container_name: clickhouse02
+    cpus: 2
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+    - 9002:9000
+    - 8124:8123
+    networks:
+      click_network: {}
+    volumes:
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse02:/etc/clickhouse-server/config.d
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse02:/var/log/clickhouse-server
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse02:/var/lib/clickhouse
+  clickhouse03:
+    image: clickhouse/clickhouse-server:24.6.1
+    hostname: clickhouse03
+    container_name: clickhouse03
+    cpus: 2
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+    - 9003:9000
+    - 8125:8123
+    networks:
+      click_network: {}
+    volumes:
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse03:/etc/clickhouse-server/config.d
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse03:/var/log/clickhouse-server
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse03:/var/lib/clickhouse
+  clickhouse04:
+    image: clickhouse/clickhouse-server:24.6.1
+    hostname: clickhouse03
+    container_name: clickhouse04
+    cpus: 2
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+    - 9004:9000
+    - 8126:8123
+    networks:
+      click_network: {}
+    volumes:
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse04:/etc/clickhouse-server/config.d
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse04:/var/log/clickhouse-server
+    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse04:/var/lib/clickhouse
+
+  haproxy:
+    image: haproxy:latest
+    container_name: haproxy
+    ports:
+      - "8120:8123"  # Прокси для ClickHouse HTTP
+      - "9000:9000"  # Прокси для ClickHouse Native (опционально)
+      # - "9092:9092"  # Прокси для Kafka HTTP
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+    networks:
+      click_network: {}
+    depends_on:
+      - clickhouse01
+      - clickhouse02
+      - clickhouse03
+      - clickhouse04
+      # - kafka1
+      # - kafka2
+      # - kafka3
+
+  
+  kafka1:
+    cpus: 0.7
+    image: confluentinc/cp-server:7.7.1
+    hostname: kafka1
+    container_name: kafka1
+    restart: on-failure:3
+    ports:
+      - 9091:9091
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1181,zookeeper2:2181,zookeeper3:3181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,SECURE://192.168.14.235:9091
+      CONFLUENT_METRICS_ENABLE: 'false'
+      KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
+      KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+      #KAFKA_LOG4J_LOGGERS: "kafka.authorizer.logger=DEBUG"
+
+      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
+      CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
+      CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+
+      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
+
+      KAFKA_CONFLUENT_BALANCER_ENABLE: 'true'
+
+      KAFKA_CONFLUENT_HTTP_SERVER_LISTENERS: http://kafka1:1090
+
+      #Embedded Rest Proxy config required for http server
+      KAFKA_KAFKA_REST_CLIENT_SECURITY_PROTOCOL: PLAINTEXT
+    volumes:
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/kafka1/:/var/lib/kafka/data
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/configs/kafka1/:/etc/kafka/
+    networks:
+      click_network: {}
+
+  kafka2:
+    cpus: 0.7
+    image: confluentinc/cp-server:7.7.1
+    hostname: kafka2
+    container_name: kafka2
+    restart: on-failure:3
+    ports:
+      - 9092:9092
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1182,zookeeper2:2181,zookeeper3:3181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19092,SECURE://192.168.14.235:9092
+      CONFLUENT_METRICS_ENABLE: 'false'
+      KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
+      KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+
+      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
+      CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
+      CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+
+      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
+
+      KAFKA_CONFLUENT_BALANCER_ENABLE: 'true'
+
+      KAFKA_CONFLUENT_HTTP_SERVER_LISTENERS: http://kafka2:2090
+
+      KAFKA_KAFKA_REST_CLIENT_SECURITY_PROTOCOL: PLAINTEXT
+    volumes:
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/kafka2/:/var/lib/kafka/data
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/configs/kafka2/:/etc/kafka/
+    networks:
+      click_network: {}
+
+  kafka3:
+    cpus: 0.7
+    image: confluentinc/cp-server:7.7.1
+    hostname: kafka3
+    container_name: kafka3
+    restart: on-failure:3
+    ports:
+      - 9093:9093
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1182,zookeeper2:2181,zookeeper3:3181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19092,SECURE://192.168.14.235:9093
+      CONFLUENT_METRICS_ENABLE: 'false'
+      KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
+      KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+
+      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
+      CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
+      CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+
+      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
+
+      KAFKA_CONFLUENT_BALANCER_ENABLE: 'true'
+
+
+      KAFKA_CONFLUENT_HTTP_SERVER_LISTENERS: http://kafka3:3090
+
+      KAFKA_KAFKA_REST_CLIENT_SECURITY_PROTOCOL: PLAINTEXT
+    volumes:
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/kafka3/:/var/lib/kafka/data
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/configs/kafka3/:/etc/kafka/
+    networks:
+      click_network: {}
+
+  schemaregistry:
+    image: confluentinc/cp-schema-registry:7.7.1
+    hostname: schemaregistry
+    container_name: schemaregistry
+    restart: on-failure:3
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+    ports:
+    - 8081:8081
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schemaregistry
+      SCHEMA_REGISTRY_GROUP_ID: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka1:19092,kafka2:19092,kafka3:19092'
+      SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: PLAINTEXT
+      SCHEMA_REGISTRY_LOG4J_ROOT_LOGLEVEL: INFO
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_DEBUG: 'true'
+    networks:
+      click_network: {}
+
+  connect:
+    image: confluentinc/cp-server-connect:7.5.1
+    hostname: connect
+    container_name: connect
+    networks:
+      click_network: {}
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+      - schemaregistry
+    ports:
+      - "8083:8083"
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/confluent-hub-components:/usr/share/confluent-hub-components
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: 'kafka1:19092,kafka2:19092,kafka3:19092'
+      CONNECT_LISTENERS: http://0.0.0.0:8083
+      CONNECT_PRODUCER_CLIENT_ID: "connect-worker-producer"
+      CONNECT_PRODUCER_ENABLE_IDEMPOTENCE: 'true'
+      CONNECT_SECURITY_PROTOCOL: PLAINTEXT
+      CONNECT_REST_ADVERTISED_HOST_NAME: connect
+      CONNECT_GROUP_ID: connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 2
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+      CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 2
+      CONNECT_STATUS_STORAGE_TOPIC: connect-status
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 2
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
+
+      CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY: 'All'
+      CONNECT_PRODUCER_SECURITY_PROTOCOL: PLAINTEXT
+
+      CONNECT_PRODUCER_MAX_BLOCK_MS: 60000
+      CONNECT_PRODUCER_CONFLUENT_MONITORING_INTERCEPTOR_SECURITY_PROTOCOL: PLAINTEXT
+
+      CONNECT_CONSUMER_SECURITY_PROTOCOL: PLAINTEXT
+      CONNECT_CONSUMER_MAX_BLOCK_MS: 60000
+
+      CLASSPATH: /usr/share/java/monitoring-interceptors/monitoring-interceptors-7.5.0.jar
+      CONNECT_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+      CONNECT_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+      CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+
+  controlcenter:
+    image: confluentinc/cp-enterprise-control-center:7.5.1
+    hostname: controlcenter
+    container_name: controlcenter
+    restart: always
+    networks:
+      click_network: {}
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/secrets:/etc/kafka/secrets
+    ports:
+      - "9021:9021"
+    environment:
+      CUB_CLASSPATH: '/usr/share/java/confluent-control-center/*:/usr/share/java/rest-utils/*:/usr/share/java/confluent-common/*:/usr/share/java/confluent-security/kafka-rest/*:/usr/share/java/kafka-rest/:/usr/share/java/cp-base-new/*'
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: kafka1:19092,kafka2:19092,kafka3:19092
+      CONTROL_CENTER_STREAMS_SECURITY_PROTOCOL: PLAINTEXT
+      CONTROL_CENTER_STREAMS_CACHE_MAX_BYTES_BUFFERING: 100000000
+      CONTROL_CENTER_STREAMS_CONSUMER_REQUEST_TIMEOUT_MS: "960032"
+
+      CONTROL_CENTER_REPLICATION_FACTOR: 2
+
+      CONTROL_CENTER_REST_LISTENERS: http://0.0.0.0:9021
+
+      CONTROL_CENTER_CONNECT_CONNECT-CLUSTER_CLUSTER: http://connect:8083
+
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
+
+      # Used by Control Center to connect to the Admin API for Self Balancing Clusters
+      #CONTROL_CENTER_STREAMS_CPREST_URL: http://kafka1:1090
+
+        #CONFLUENT_METADATA_BOOTSTRAP_SERVER_URLS: http://kafka1:1090
+        #CONFLUENT_METADATA_BASIC_AUTH_USER_INFO: admin:admin
+      CONTROL_CENTER_LOG4J_ROOT_LOGLEVEL: INFO
+
+  kafka_ui:
+    image: provectuslabs/kafka-ui:latest
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.TAG == node1"
+    networks:
+      - click_network
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+      - schemaregistry
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper1:1181, zookeeper2:2181, zookeeper3:3181
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    ports:
+      - 8080:8080
+  redis:
+    image: redis:latest
+    hostname: redis
+    container_name: redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    restart: always
+    ports:
+      - 6379:6379
+    networks:
+      click_network: {}
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/redis:/data
+  postgres:
+    image: temsalnikov/postgres:1.0.0
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: "postgres"
+      MAX_CONNECTION: 200
+      # POSTGRES_DB: superset
+      # POSTGRES_PASSWORD: superset
+      # POSTGRES_USER: superset
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/postgres/init-database.sh:/docker-entrypoint-initdb.d/init-database.sh
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/data/postgres:/var/lib/postgresql/data
+    networks:
+      click_network: {}
+  superset:
+    image: temsalnikov/superset:1.0.0
+    hostname: superset
+    container_name: superset
+    restart: on-failure:3
+    ports:
+      - 8088:8088
+    depends_on:
+      - postgres
+      - redis
+      - clickhouse01
+      - clickhouse02
+      - clickhouse03
+      - clickhouse04
+    environment:
+      SUPERSET_CONFIG_PATH: /etc/superset/superset_config.py
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset/superset_init.sh:/docker-entrypoint-initdb.d/superset_init.sh
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset/docker_entrypoint.sh:/docker-entrypoint-initdb.d/docker_entrypoint.sh
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset:/etc/superset
+    networks:
+      click_network: {}
+    entrypoint: /docker-entrypoint-initdb.d/docker_entrypoint.sh
+   
