@@ -165,7 +165,7 @@ services:
   
   kafka1:
     cpus: 0.7
-    image: confluentinc/cp-server:7.7.1
+    image: confluentinc/cp-kafka:7.7.1
     hostname: kafka1
     container_name: kafka1
     restart: on-failure:3
@@ -175,7 +175,7 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1181,zookeeper2:2181,zookeeper3:3181"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,SECURE://192.168.14.235:9091
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,SECURE://192.168.14.226:9091
       CONFLUENT_METRICS_ENABLE: 'false'
       KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
       KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
@@ -185,11 +185,11 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
       #KAFKA_LOG4J_LOGGERS: "kafka.authorizer.logger=DEBUG"
 
-      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      # KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
       CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
       CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
-      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'false'
 
       KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
 
@@ -207,7 +207,7 @@ services:
 
   kafka2:
     cpus: 0.7
-    image: confluentinc/cp-server:7.7.1
+    image: confluentinc/cp-kafka:7.7.1
     hostname: kafka2
     container_name: kafka2
     restart: on-failure:3
@@ -217,7 +217,7 @@ services:
       KAFKA_BROKER_ID: 2
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1182,zookeeper2:2181,zookeeper3:3181"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19092,SECURE://192.168.14.235:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19092,SECURE://192.168.14.226:9092
       CONFLUENT_METRICS_ENABLE: 'false'
       KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
       KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
@@ -226,11 +226,11 @@ services:
 
       KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
 
-      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      # KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
       CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
       CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
-      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'false'
 
       KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
 
@@ -247,7 +247,7 @@ services:
 
   kafka3:
     cpus: 0.7
-    image: confluentinc/cp-server:7.7.1
+    image: confluentinc/cp-kafka:7.7.1
     hostname: kafka3
     container_name: kafka3
     restart: on-failure:3
@@ -257,7 +257,7 @@ services:
       KAFKA_BROKER_ID: 3
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1182,zookeeper2:2181,zookeeper3:3181"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19092,SECURE://192.168.14.235:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19092,SECURE://192.168.14.226:9093
       CONFLUENT_METRICS_ENABLE: 'false'
       KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
       KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
@@ -266,11 +266,11 @@ services:
 
       KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
 
-      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      # KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
       CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
       CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
-      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'false'
 
       KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
 
@@ -412,42 +412,6 @@ services:
       DYNAMIC_CONFIG_ENABLED: 'true'
     ports:
       - 8080:8080
-  redis:
-    image: redis:latest
-    hostname: redis
-    container_name: redis
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 30s
-      retries: 50
-    restart: always
-    ports:
-      - 6379:6379
-    networks:
-      click_network: {}
-    volumes:
-      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/redis:/data
-  postgres:
-    image: temsalnikov/postgres:1.0.0
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
-      interval: 5s
-      retries: 5
-    restart: always
-    ports:
-      - 5432:5432
-    environment:
-      POSTGRES_PASSWORD: "postgres"
-      MAX_CONNECTION: 200
-      # POSTGRES_DB: superset
-      # POSTGRES_PASSWORD: superset
-      # POSTGRES_USER: superset
-    volumes:
-      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/postgres/init-database.sh:/docker-entrypoint-initdb.d/init-database.sh
-      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/data/postgres:/var/lib/postgresql/data
-    networks:
-      click_network: {}
   superset:
     image: temsalnikov/superset:1.0.0
     hostname: superset
@@ -456,8 +420,6 @@ services:
     ports:
       - 8088:8088
     depends_on:
-      - postgres
-      - redis
       - clickhouse01
       - clickhouse02
       - clickhouse03
