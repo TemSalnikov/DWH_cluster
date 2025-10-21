@@ -1,31 +1,29 @@
 import uuid
-import logging
+from airflow.utils.log.logging_mixin import LoggingMixin
 from typing import Dict, List
 from clickhouse_driver import Client
 from clickhouse_driver.errors import Error as ClickhouseError
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = LoggingMixin().log
 
-
-CLICKHOUSE_CONFIG = {
-    'host': 'localhost',
-    'port': 9000,
-    'user': 'default',
-    'password': '',
-    'database': 'default'
+CLICKHOUSE_CONN: dict[str, str | int] = {
+    'host': '192.168.14.235',
+    'port': 9001,
+    'user': 'admin',
+    'password': 'admin',
+    'database': 'stg'
 }
 
 def get_clickhouse_client():
     """Создание клиента ClickHouse"""
     try:
-        client = Client(**CLICKHOUSE_CONFIG)
-        logger.info("Успешное подключение к ClickHouse")
-        return client
+        return Client(
+                host=CLICKHOUSE_CONN['host'],
+                port=CLICKHOUSE_CONN['port'],
+                user=CLICKHOUSE_CONN['user'],
+                password=CLICKHOUSE_CONN['password'],
+                database=CLICKHOUSE_CONN['database']
+            )
     except ClickhouseError as e:
         logger.error(f"Ошибка подключения к ClickHouse: {e}")
         raise
@@ -33,19 +31,53 @@ def get_clickhouse_client():
 def get_last_load_data(source_table: str) -> str:
     """Получение последних данных из источника"""
     client = None
-    tmp_table_name = f"tmp.tmp_{source_table}_{uuid.uuid4().hex}"
+    tmp_table_name = f"tmp.tmp_v_sv_all_{source_table}_{uuid.uuid4().hex}"
     
     try:
         client = get_clickhouse_client()
-        logger.info(f"Начало получения данных из таблицы {source_table}")
-        ### надо подусать над запросом
+        logger.info(f"Подклчение к clickhouse успешно выполнено")
+        ### надо подумать над запросом
         query = f"""
         CREATE TABLE {tmp_table_name} AS 
         SELECT 
             product_id,
-            src
+            src,
+            effective_dttm
         FROM stg.v_sv_all_{source_table}
         """
+        logger.info(f"Создан запрос: {query}")
+
+        client.execute(query)
+        logger.info(f"Создана временная таблица {tmp_table_name} с данными из {source_table}")
+        
+        return tmp_table_name
+        
+    except ClickhouseError as e:
+        logger.error(f"Ошибка при получении данных из {source_table}: {e}")
+        raise
+    finally:
+        if client:
+            client.disconnect()
+            logger.debug("Подключение к ClickHouse закрыто")
+
+def get_increment_load_data(source_table: str, p_from_proces_dttm: datetime, p_end_proces_dttm: datetime) -> str:
+    """Получение последних данных из источника"""
+    client = None
+    tmp_table_name = f"tmp.tmp_v_si_all_{source_table}_{uuid.uuid4().hex}"
+    
+    try:
+        client = get_clickhouse_client()
+        logger.info(f"Подклчение к clickhouse успешно выполнено")
+        ### надо подумать над запросом
+        query = f"""
+        CREATE TABLE {tmp_table_name} AS 
+        SELECT 
+            product_id,
+            src,
+            effective_dttm
+        FROM stg.v_si_all_{source_table}({p_from_proces_dttm},{p_end_proces_dttm})
+        """
+        logger.info(f"Создан запрос: {query}")
         
         client.execute(query)
         logger.info(f"Создана временная таблица {tmp_table_name} с данными из {source_table}")
@@ -75,7 +107,8 @@ def compare_with_hub(tmp_table: str, hub_table: str) -> Dict[str, str]:
         CREATE TABLE {in_hub_table} AS
         SELECT DISTINCT 
             t.product_id,
-            t.src
+            t.src,
+            t.effective_dttm
         FROM {tmp_table} t
         LEFT JOIN {hub_table} h 
             ON t.product_id = h.product_id AND t.src = h.src
@@ -87,7 +120,8 @@ def compare_with_hub(tmp_table: str, hub_table: str) -> Dict[str, str]:
         CREATE TABLE {not_in_hub_table} AS
         SELECT DISTINCT 
             t.product_id,
-            t.src
+            t.src,
+            t.effective_dttm
         FROM {tmp_table} t
         LEFT JOIN {hub_table} h 
             ON t.product_id = h.product_id AND t.src = h.src
@@ -133,7 +167,8 @@ def generate_uuids(tmp_table: str) -> str:
         SELECT 
             generateUUIDv4() as product_uuid,
             product_id,
-            src
+            src,
+            effective_dttm
         FROM {tmp_table}
         """
         
@@ -170,7 +205,9 @@ def insert_to_hub(pre_hub_table: str, hub_table: str):
         SELECT 
             product_uuid,
             product_id,
-            src
+            src,
+            effective_dttm as effective_from_dttm,
+            '2099-12-31 23:59:59' as effective_to_dttm
         FROM {pre_hub_table}
         """
         
