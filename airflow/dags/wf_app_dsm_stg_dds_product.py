@@ -47,7 +47,7 @@ def wf_app_dsm_stg_dds_product():
                 product_id,
                 src,
                 effective_dttm
-            FROM stg.v_sv_all_{source_table}
+            FROM stg.v_sv_{source_table}
             """
             logger.info(f"Создан запрос: {query}")
 
