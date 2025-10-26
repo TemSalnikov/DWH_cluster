@@ -8,7 +8,8 @@ script_path = os.path.abspath(__file__)
 project_path = os.path.dirname(script_path)+'/libs/dds'
 sys.path.append(project_path)
 import task_group_creation_surogate as tg_sur
-import functions_dds as fn_dds
+# import functions_dds as fn_dds
+from functions_dds import convert_hist_p2i, load_delta
 # from task_group_creation_surogate import hub_load_processing_tasks, get_clickhouse_client
 
 default_args = {
@@ -36,12 +37,100 @@ default_args = {
 )
 
 def wf_app_dsm_stg_dds_product():
-    src_table_name = 'stg.'             #название таблицы источника
+    src_table_name = 'mart_dcm_data'    #название таблицы источника
     tgt_table_name = 'dds.dds_product'  #название целевой таблицы
     hub_table_name = 'dds.hub_product'  #название таблицы Хаба
-    pk_list = ['product_id']            #список полей PK
-    bk_list = []                        #Список полей бизнесс данных
-    name_sur_key = 'product_uuid'      #название сурогатного ключа
+    pk_list = ['nm_ti']                 #список полей PK источника
+    pk_list_dds = ['product_uuid']      #список полей PK таргета
+    bk_list = ['nm_ti',
+                'nm_full',
+                'nm_t',
+                'nm_br',
+                'nm_pack',
+                'group_nm_rus',
+                'corp',
+                'nm_d',
+                'mv',
+                'mv_nm_mu',
+                'count_in_bl',
+                'count_bl',
+                'nm_c',
+                'atc1',
+                'nm_atc1',
+                'atc2',
+                'nm_atc2',
+                'atc3',
+                'nm_atc3',
+                'atc4',
+                'nm_atc4',
+                'atc5',
+                'nm_atc5',
+                'original',
+                'brended',
+                'recipereq',
+                'jnvlp',
+                'ephmra1',
+                'nm_ephmra1',
+                'ephmra2',
+                'nm_ephmra2',
+                'ephmra3',
+                'nm_ephmra3',
+                'ephmra4',
+                'nm_ephmra4',
+                'nm_ti',
+                'farm_group',
+                'localized_status',
+                'nm_f',
+                'bad1',
+                'nm_bad1',
+                'bad2',
+                'nm_bad2',
+                'nm_dt']     #Список полей бизнесс данных источника
+    bk_list_dds = ['mnn_code',
+                    'full_trade_name',
+                    'trade_name',
+                    'brand_name',
+                    'package_name',
+                    'product_owner_name',
+                    'corporation_name',
+                    'dosage_name',
+                    'weight_num',
+                    'weight_unit_name',
+                    'blister_cnt',
+                    'blister_package_cnt',
+                    'country_name',
+                    'atc1_code',
+                    'atc1_name',
+                    'atc2_code',
+                    'atc2_name',
+                    'atc3_code',
+                    'atc3_name',
+                    'atc4_code',
+                    'atc4_name',
+                    'atc5_code',
+                    'atc5_name',
+                    'original_type',
+                    'branded_type',
+                    'recipereq_type',
+                    'jnvlp_type',
+                    'ephmra1_code',
+                    'ephmra1_name',
+                    'ephmra2_code',
+                    'ephmra2_name',
+                    'ephmra3_code',
+                    'ephmra3_name',
+                    'ephmra4_code',
+                    'ephmra4_name',
+                    'mnn_code',
+                    'farm_group_name',
+                    'localized_type',
+                    'dosage_form_name',
+                    'classification_bad1_name',
+                    'compound_bad1_name',
+                    'classification_bad2_name',
+                    'compound_bad2_name',
+                    'product_type']     #Список полей бизнесс данных таргета                  
+    name_sur_key = 'product_uuid'       #название сурогатного ключа
 
     @task
     def check_data_availability() -> bool:
@@ -58,11 +147,11 @@ def wf_app_dsm_stg_dds_product():
         if data_ready:
             # Получаем параметры из контекста выполнения
             dag_run_conf = context["dag_run"].conf if "dag_run" in context else {}
-            _dag_id = context["dag"] if "dag" in context else ''
-            algo_id = str(_dag_id).split(':')[1].strip().strip('>')[3:]
+            # _dag_id = context["dag"] if "dag" in context else ''
+            # algo_id = str(_dag_id).split(':')[1].strip().strip('>')[3:]
             # Объединяем с параметрами по умолчанию из DAG
             parametrs = {**context["params"], **dag_run_conf}
-            return parametrs[algo_id]
+            return parametrs
         else: raise
     @task
     def get_inc_load_data(source_table: str, pk_list: list, bk_list:list, p_version_prev: str, p_version_new: str) -> str:
@@ -78,11 +167,10 @@ def wf_app_dsm_stg_dds_product():
             query = f"""
             CREATE TABLE {tmp_table_name} AS 
             SELECT 
-                {pk_list},
-                {bk_list},
+                {', '.join([f'{item1} as {item2}' for item1, item2 in zip(bk_list, bk_list_dds)])},
                 src,
                 effective_dttm
-            FROM stg.v_iv_{source_table}({p_version_prev}, {p_version_new})
+            FROM stg.v_iv_{source_table}(\'{p_version_prev}\', \'{p_version_new}\')
             """
             logger.info(f"Создан запрос: {query}")
 
@@ -103,9 +191,9 @@ def wf_app_dsm_stg_dds_product():
     def get_prepared_data(tmp_table: str, hub_table: str, name_sure_column: str) -> str:
         """Получение ключей из Hub"""
         client = None
-        tmp_table_name = f"tmp.tmp_preload_{tg_sur.uuid.uuid4().hex}"
         
         try:
+            tmp_table_name = f"tmp.tmp_preload_{tg_sur.uuid.uuid4().hex}"
             logger = LoggingMixin().log
             client = tg_sur.get_clickhouse_client()
             logger.info(f"Подклчение к clickhouse успешно выполнено")
@@ -116,7 +204,7 @@ def wf_app_dsm_stg_dds_product():
                 h.{name_sur_key},
                 t.*
             FROM {tmp_table} t
-            JOIN dds.{hub_table} h 
+            JOIN {hub_table} h 
                 ON t.product_id = h.product_id AND t.src = h.src AND h.effective_from_dttm <= t.effective_dttm
                 AND h.effective_to_dttm > t.effective_dttm
             """
@@ -143,7 +231,9 @@ def wf_app_dsm_stg_dds_product():
     generate_sur_key_task = tg_sur.hub_load_processing_tasks(hub_table_name, inc_table_task)
     prepared_data_task = get_prepared_data(inc_table_task, hub_table_name, name_sur_key)
     hist_p2i_task = convert_hist_p2i(prepared_data_task, pk_list)
-    load_delta_task = load_delta(hist_p2i_task, tgt_table_name, pk_list, bk_list)
+    load_delta_task = load_delta(hist_p2i_task, tgt_table_name, ['product_uuid'], bk_list_dds)
     
     check_task >> parametrs_data_task >> inc_table_task >> generate_sur_key_task >> prepared_data_task
-    prepared_data_task >> hist_p2i_task >> load_delta_task
+    inc_table_task >> prepared_data_task >> hist_p2i_task >> load_delta_task
+
+wf_app_dsm_stg_dds_product()

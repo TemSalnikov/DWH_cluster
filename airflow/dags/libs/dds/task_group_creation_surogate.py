@@ -1,6 +1,7 @@
 # import fn_creation_surogate
 import uuid
 from airflow.decorators import dag, task_group, task
+from airflow.utils.log.logging_mixin import LoggingMixin
 from clickhouse_driver import Client
 from clickhouse_driver.errors import Error as ClickhouseError
 
@@ -9,7 +10,6 @@ CLICKHOUSE_CONN: dict[str, str | int] = {
     'port': 9001,
     'user': 'admin',
     'password': 'admin',
-    'database': 'stg'
 }
 
 def get_clickhouse_client():
@@ -20,14 +20,13 @@ def get_clickhouse_client():
                 host=CLICKHOUSE_CONN['host'],
                 port=CLICKHOUSE_CONN['port'],
                 user=CLICKHOUSE_CONN['user'],
-                password=CLICKHOUSE_CONN['password'],
-                database=CLICKHOUSE_CONN['database']
+                password=CLICKHOUSE_CONN['password']
             )
     except ClickhouseError as e:
         logger.error(f"Ошибка подключения к ClickHouse: {e}")
         raise 
 
-@task_group(group_id = 'Загрузка Hub')
+@task_group(group_id = 'load_hub')
 def hub_load_processing_tasks(hub_name: str, source_table: str):
     
     @task
@@ -64,7 +63,7 @@ def hub_load_processing_tasks(hub_name: str, source_table: str):
                 logger.debug("Подключение к ClickHouse закрыто")
     
     @task
-    def get_increment_load_data(source_table: str, p_from_proces_dttm: datetime, p_end_proces_dttm: datetime) -> str:
+    def get_increment_load_data(source_table: str, p_from_proces_dttm: str, p_end_proces_dttm: str) -> str:
         """Получение последних данных из источника"""
         client = None
         tmp_table_name = f"tmp.tmp_v_si_all_{source_table}_{uuid.uuid4().hex}"

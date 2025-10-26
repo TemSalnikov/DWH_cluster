@@ -1,5 +1,6 @@
 import uuid
 from airflow.utils.log.logging_mixin import LoggingMixin
+from airflow.decorators import task
 from typing import Dict, List
 from clickhouse_driver import Client
 from clickhouse_driver.errors import Error as ClickhouseError
@@ -10,8 +11,7 @@ CLICKHOUSE_CONN: dict[str, str | int] = {
     'host': '192.168.14.235',
     'port': 9001,
     'user': 'admin',
-    'password': 'admin',
-    'database': 'stg'
+    'password': 'admin'
 }
 
 def get_clickhouse_client():
@@ -21,43 +21,46 @@ def get_clickhouse_client():
                 host=CLICKHOUSE_CONN['host'],
                 port=CLICKHOUSE_CONN['port'],
                 user=CLICKHOUSE_CONN['user'],
-                password=CLICKHOUSE_CONN['password'],
-                database=CLICKHOUSE_CONN['database']
+                password=CLICKHOUSE_CONN['password']
             )
     except ClickhouseError as e:
         logger.error(f"Ошибка подключения к ClickHouse: {e}")
         raise
-
+@task
 def convert_hist_p2i(tmp_table: str, pk_list: list) -> str:
     client = None
     tmp_table_name = f"tmp.tmp_p2i_{uuid.uuid4().hex}"
-    
-    try:
-        logger = LoggingMixin().log
-        client = get_clickhouse_client()
-        logger.info(f"Подклчение к clickhouse успешно выполнено")
-        query = f"""
+    if tmp_table:
+        try:
+            logger = LoggingMixin().log
+            client = get_clickhouse_client()
+            logger.info(f"Подклчение к clickhouse успешно выполнено")
+            tbl=f'stg.mart_data_dsm'
+
+            query = f"""
             CREATE TABLE {tmp_table_name} AS
-            SELECT  
-               *,
-               effective_dttm as effective_from_dttm
-               LEAD(effective_dttm, 1, '2999-12-31 23:59:59') OVER(PARTITION BY {pk_list} ORDER BY effective_dttm) as effective_to_dttm
+            SELECT DISTINCT 
+                t.*,
+                effective_dttm as effective_from_dttm,
+                LEAD(effective_dttm, 1, '2999-12-31 23:59:59') OVER(PARTITION BY {', '.join(pk_list)} ORDER BY effective_dttm) as effective_to_dttm
             FROM {tmp_table} t
             """
-        logger.info(f"Создан запрос: {query}")
+            logger.info(f"Создан запрос: {query}")
 
-        client.execute(query)
-        logger.info(f"Создана временная таблица {tmp_table_name}")
-            
-        return tmp_table_name
-    except ClickhouseError as e:
-            logger.error(f"Ошибка при получении данных из {tmp_table}: {e}")
-            raise
-    finally:
-        if client:
-            client.disconnect()
-            logger.debug("Подключение к ClickHouse закрыто")
-
+            client.execute(query)
+            logger.info(f"Создана временная таблица {tmp_table_name}")
+                
+            return tmp_table_name
+        except ClickhouseError as e:
+                logger.error(f"Ошибка при получении данных из {tmp_table}: {e}")
+                raise
+        finally:
+            if client:
+                client.disconnect()
+                logger.debug("Подключение к ClickHouse закрыто")
+    else:
+         return ''
+@task
 def load_delta(src_table: str, tgt_table:str, pk_list: list, bk_list:list):
     ### tgt_table - указывается аксессор получения актуального среза на чистую версию dds-таблицы
     
@@ -142,7 +145,7 @@ def load_delta(src_table: str, tgt_table:str, pk_list: list, bk_list:list):
                {bk_list},
                effective_from_dttm,
                effective_to_dttm,
-               LEAD(effective_from_dttm, 1, '2999-12-31 23:59:59') OVER(PARTITION BY {pk_list} ORDER BY effective_from_dttm ASC, effective_to_dttm DESC) as new_effective_to_dttm,
+               LEAD(effective_from_dttm, 1, '2999-12-31 23:59:59') OVER(PARTITION BY {', '.join(pk_list)} ORDER BY effective_from_dttm ASC, effective_to_dttm DESC) as new_effective_to_dttm,
                src,
                hash_diff,
                tbl
