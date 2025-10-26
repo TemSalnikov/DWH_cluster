@@ -128,7 +128,7 @@ def hub_load_processing_tasks(hub_name: str, source_table: str):
                 t.src,
                 t.effective_dttm
             FROM {tmp_table} t
-            LEFT JOIN dds.{hub_table} h 
+            LEFT JOIN {hub_table} h 
                 ON t.product_id = h.product_id AND t.src = h.src AND h.effective_from_dttm <= t.effective_dttm
                 AND h.effective_to_dttm > t.effective_dttm
             WHERE h.product_uuid IS NULL
@@ -267,13 +267,13 @@ def hub_load_processing_tasks(hub_name: str, source_table: str):
                 client.disconnect()
                 logger.debug("Подключение к ClickHouse закрыто")
 
-    last_load_table = get_last_load_data(source_table = source_table) ### наверное эту временную таблицу нужно вне task group получать и передавать во внутрь
-    cmp_table = compare_with_hub(tmp_table = last_load_table, hub_table = hub_name)
+    # last_load_table = get_last_load_data(source_table = source_table) ### наверное эту временную таблицу нужно вне task group получать и передавать во внутрь
+    cmp_table = compare_with_hub(tmp_table = source_table, hub_table = hub_name)
     uuid_table = generate_uuids(tmp_table=cmp_table)
     insert_to_hub = insert_to_hub(pre_hub_table = uuid_table, hub_table = hub_name)
-    cleanup_tables = cleanup_tables([last_load_table, cmp_table, uuid_table])
+    cleanup_tables = cleanup_tables([cmp_table, uuid_table])
 
-    last_load_table >> cmp_table >> uuid_table >> insert_to_hub >> cleanup_tables
+    cmp_table >> uuid_table >> insert_to_hub >> cleanup_tables
     
 
 
