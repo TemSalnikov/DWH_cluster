@@ -1,31 +1,18 @@
-"""
-1. Подключение к clickhouse на слое tmp -> создать временную таблицу там
-2. Подключение к oracle-базе 
-    -> вычитываю по заданным параметрам данные в таблицу в clickHouse 
-    -> вычитываю из временной таблицы данные + добавляю необходимые поля (effective_dttm + deleted_flag)
-    -> положить в целевую таблицу clickhouse на слой stg
-    -> удалить временные таблицы
-a
-"""
-
 from datetime import datetime, timedelta
-#from airflow.utils.log.logging_mixin import LoggingMixin
-#from airflow import DAG
-#from airflow.decorators import dag, task
-#from airflow.utils.dates import days_ago
-import cx_Oracle
+from airflow.utils.log.logging_mixin import LoggingMixin
+from airflow import DAG
+from airflow.decorators import dag, task
+from airflow.utils.dates import days_ago
+from airflow.models import Param
+#import cx_Oracle
 from clickhouse_driver import Client
 import pandas as pd
 from typing import Dict, List, Any
 import oracledb
+import hashlib
+from airflow.utils.log.logging_mixin import LoggingMixin
 
-#loger = LoggingMixin().log
-
-def create_text_hash(row, columns):
-    # Объединяем значения столбцов в строку
-    combined = ''.join(str(row[col]) for col in columns)
-    # Создаем хеш SHA256 и преобразуем в hex-строку
-    return hashlib.sha256(combined.encode()).hexdigest()
+loger = LoggingMixin().log
 
 def compute_row_hash(row, columns=None):
     if columns:
@@ -43,8 +30,6 @@ ORACLE_CONN = {
     'port': 27091,
     'sid': 'webiasdb2'
 }
-
-
 
 CLICKHOUSE_CONN: dict[str, str | int] = {
     'host': '192.168.14.235',
@@ -74,102 +59,201 @@ def get_clickhouse_client() -> Client:
     )
 
 # Декоратор DAG
-"""
+
+default_args = {
+    'owner': 'airflow',
+    'retries': 3,
+    'retry_delay': timedelta(minutes=5),
+    'retry_exponential_backoff': True,
+    'max_retry_delay': timedelta(minutes=30),
+}
+
 @dag(
-    dag_id='altay_data_import',
-    schedule_interval='@daily',
+    dag_id='extract_dsm',
+    schedule_interval='0 9 6 * *', # в 9 утра каждого месяца 6 числа
     start_date=days_ago(1),
+    default_args=default_args,
     catchup=False,
-    default_args={
-        'owner': 'airflow',
-        'retries': 1,
-        'retry_delay': timedelta(minutes=5)
+    params={
+        'dates_from': Param(
+            (datetime.now() - timedelta(days=1)).replace(day=1).strftime("%Y-%m-%d"),
+            type='string',
+            description='Дата начала отчетного периода в формате YYYY-MM-01. Указывать тот месяц, за который требуется отчет. Если требуется прогрузка за 1 месяц, поле "dates_to" оставить пустым.'
+        ),
+        'dates_to': Param(
+            '-',
+            type='string',
+            description='Дата окончания отчетного периода в формате YYYY-MM-01.'
+        )
     },
     tags=['oracle', 'clickhouse', 'data_migration']
 )
-def altay_data_import_dag():
+def extract_dsm():
     
     @task
-    """
-def load_altay_data(execution_date: datetime = None):
-    """Загрузка данных из V$ALTAY_DATA с фильтрацией по периоду"""
-    if execution_date is None:
-        execution_date = datetime.now()
-        
-    #start_date = (execution_date - timedelta(days=1))
-    #end_date = execution_date
-    start_date = execution_date - timedelta(days=63)
-    print(start_date)
-    params = {'start_date': start_date, 'end_date': execution_date}
+    def load_altay_data(**kwargs):
+        """Загрузка данных из V$ALTAY_DATA"""
+
+        message = 'Нет новых данных для загрузки в mart_dsm_sale'
+
+        # Получаем параметр даты из контекста
+        dag_run = kwargs.get('dag_run')
+        if dag_run and dag_run.conf:
+            report_date_from = dag_run.conf.get('dates_from')
+            report_date_to = dag_run.conf.get('dates_to')
+
+            print('dates_from:', report_date_from, '\ndates_to:', report_date_to)
+
+        if report_date_to == '-':
+            oracle_query = f"""SELECT * from DATA_MART."V$ALTAY_DATA" where to_char(effective_dttm, 'yyyy-mm-dd') = :report_date_from """ 
+            params = {'report_date_from': report_date_from}
+        else:
+            oracle_query = f"""SELECT * from DATA_MART."V$ALTAY_DATA" where to_char(effective_dttm, 'yyyy-mm-dd') between :report_date_from and :report_date_to""" 
+            params = {'report_date_from': report_date_from, 'report_date_to': report_date_to}
+
+        try:
+            with get_oracle_connection() as oracle_conn:
+                df_oracle = pd.read_sql(oracle_query, oracle_conn, params=params)
+
+                # 1. Проверка наличия данных в БД Oracle
+                if df_oracle.empty:
+                    print(message)
+
+                else:
+                    df_for_insert.columns = [col.lower() for col in df_for_insert.columns]
+                    
+                    #hash_cols = ["SALES_TYPE_ID", "CD_REG", "CD_U", "STAT_YEAR", "STAT_MONTH"]
+
+                    df_for_insert = df_oracle.assign(
+                                                        processed_dttm=pd.Timestamp.now().normalize(), 
+                                                        deleted_flag=0
+                                                        #hash_diff=lambda df: df.apply(compute_row_hash, columns=hash_cols, axis=1)  # Хеш для выбранных столбцов
+                                                    )  # добавляем столбцы processed_dttm и deleted_flag
+                    
+                    # 2. Вставка данных в clickhouse 
+                    ch_client = get_clickhouse_client()
+                    ch_client.execute('INSERT INTO mart_dsm_sale VALUES', df_for_insert.to_dict('records'))
+                    ch_client.disconnect()
+
+                    if report_date_to == '-':
+                        print(f"Успешно загружено {len(df_for_insert)} записей в mart_dsm_stat_product за период {report_date_from}")
+                    else:
+                        print(f"Успешно загружено {len(df_for_insert)} записей в mart_dsm_stat_product за период с {report_date_from} по {report_date_to}")
+                
+        except Exception as e:
+            print(f"Ошибка при загрузке mart_dsm_sale: {str(e)}")
+            raise
+
+    @task
+    def load_altay_dict():
+        """Загрузка новых данных из V$ALTAY_DICT """
+
+        message = 'Нет новых данных для загрузки в mart_dsm_stat_product'
+
+        oracle_query = f"""SELECT distinct * from DATA_MART."V$ALTAY_DICT" """
+
+        try:
+            with get_oracle_connection() as oracle_conn:
+                df_oracle = pd.read_sql(oracle_query, oracle_conn)
+                
+                # 1. Проверка наличия данных в БД Oracle
+                if df_oracle.empty:
+                    print(message)
+
+                else:
+                    # 2. Проверка наличия новых данных в БД Oracle
+                    # преобразования наименований столбцов, т.к. в Oracle указаны в верхнем регистре, в ClickHouse - в нижнем
+                    df_oracle.columns = [col.lower() for col in df_oracle.columns]
+
+                    ch_client = get_clickhouse_client()
+                    df_click = pd.DataFrame(ch_client.execute(f"""select cd_u from mart_dsm_stat_product"""), columns=['cd_u'])
+
+                    # выбор строк в Oracle, кот. отсутствую в ClickHouse
+                    diff_rows = ~df_oracle['cd_u'].isin(df_click['cd_u'])
+                    df_insert_del_rows = df_oracle.loc[diff_rows]
+
+                    if len(df_insert_del_rows) == 0:
+                        print(message)
+
+                    else:
+                        # 3. Вставка данных в clickhouse 
+                        ch_table_structure = ch_client.execute('DESCRIBE TABLE mart_dsm_stat_product')
+                        ch_columns = [row[0] for row in ch_table_structure]
+                        
+                        #hash_cols = ["cd_u"]
+
+                        df_for_insert = df_insert_del_rows.assign(
+                                                            processed_dttm=pd.Timestamp.now().normalize(), 
+                                                            deleted_flag=0
+                                                            #hash_diff=lambda df: df.apply(compute_row_hash, columns=hash_cols, axis=1)  # Хеш для выбранных столбцов
+                                                        )  # добавляем столбцы processed_dttm и deleted_flag
+
+                        ch_client.insert_dataframe('INSERT INTO mart_dsm_stat_product VALUES', df_for_insert, settings=dict(use_numpy=True))
+                        
+                        ch_client.disconnect()
+                        print(f"Успешно загружено {len(df_for_insert)} записей в mart_dsm_stat_product")
+                
+        except Exception as e:
+            print(f"Ошибка при загрузке mart_dsm_stat_product: {str(e)}")
+            raise
     
-    oracle_query = f"""SELECT * from DATA_MART."V$ALTAY_DATA" where rownum <= 5 """
-    
-    #where STAT_DATE between :start_date and :end_date
-    #oracle_query = f'''SELECT count(*) from DATA_MART."V$ALTAY_DATA" '''
+    @task
+    def load_altay_reg():
+        """Загрузка новых данных из V$ALTAY_REG """
 
-    ch_query = f"""select * from stg.mart_dcm_data where deleted_flag = 0"""
+        message = 'Нет новых данных для загрузки в mart_dsm_region'
 
-    try:
-        with get_oracle_connection() as oracle_conn:
-            df_oracle = pd.read_sql(oracle_query, oracle_conn)
-            print(df_oracle)
-            print(type(df_oracle))
+        oracle_query = f"""SELECT distinct * from DATA_MART."V$ALTAY_REG" """
 
-            if not df_oracle.empty:
-                ch_client = get_clickhouse_client()
-                df_ch = ch_client.execute(ch_query)
+        try:
+            with get_oracle_connection() as oracle_conn:
+                df_oracle = pd.read_sql(oracle_query, oracle_conn)
+                
+                # 1. Проверка наличия данных в БД Oracle
+                if df_oracle.empty:
+                    print(message)
 
-                #ch_client.execute('INSERT INTO stg.mart_dcm_data VALUES', oracle_query.to_dict('records'))
+                else:
+                    # 2. Проверка наличия новых данных в БД Oracle
+                    # преобразования наименований столбцов, т.к. в Oracle указаны в верхнем регистре, в ClickHouse - в нижнем
+                    df_oracle.columns = [col.lower() for col in df_oracle.columns]
 
-                #df_ch = ch_client.execute(ch_query)
-                #print(df_ch)
+                    ch_client = get_clickhouse_client()
+                    df_click = pd.DataFrame(ch_client.execute(f"""select cd_reg, sales_type_id from mart_dsm_region"""), columns=['cd_reg', 'sales_type_id'])
 
-                #print(type(df_ch))
-                hash_cols = ["SALES_TYPE_ID", "CD_REG", "CD_U", "STAT_YEAR", "STAT_MONTH"]
-                print(111111)
-                df_insert_del_rows = (df_oracle.merge(
-                                                    df_ch, 
-                                                    on=["cd_reg", "cd_u", "stat_year", "stat_month", "sales_type_id"], 
-                                                    how="left"
-                                                ) # left join
-                                                .query("_merge == 'left_only'")  # удаляем not null-строки из второй таблицы
-                                                .drop('_merge', axis=1)          # удаляем доп.столбец
-                                                .assign(
-                                                    effective_dttm=pd.Timestamp.now().normalize(), 
-                                                    deleted_flag=1,
-                                                    hash_diff=lambda df: df.apply(compute_row_hash, columns=hash_cols, axis=1)  # Хеш для выбранных столбцов
-                                                )  # добавляем столбцы effective_dttm и deleted_flag
-                                                )
+                    # выбор строк в Oracle, кот. отсутствую в ClickHouse
+                    existing_rows_ch = set(zip(df_click['cd_reg'], df_click['sales_type_id']))
+                    diff_rows = df_oracle.apply(lambda row: (row['cd_reg'], row['sales_type_id']) not in existing_rows_ch, axis=1)
+                    df_insert_del_rows = df_oracle.loc[diff_rows]
 
-                print(df_insert_del_rows)
+                    if len(df_insert_del_rows) == 0:
+                        print(message)
 
-                df_insert_add_rows = (ch_client.merge(
-                                                    df_ch, 
-                                                    on=["cd_reg", "cd_u", "stat_year", "stat_month", "sales_type_id"], 
-                                                    how="right"
-                                                ) # left join
-                                                .query("_merge == 'right_only'")  # удаляем not null-строки из первой таблицы
-                                                .drop('_merge', axis=1)          # удаляем доп.столбец
-                                                .assign(
-                                                    effective_dttm=pd.Timestamp.now().normalize(), 
-                                                    deleted_flag=1,
-                                                    hash_diff=lambda df: df.apply(compute_row_hash, columns=hash_cols, axis=1)  # Хеш для всех столбцов
-                                                )  # добавляем столбцы effective_dttm и deleted_flag
-                                                )
+                    else:
+                        # 3. Вставка данных в clickhouse 
+                        ch_table_structure = ch_client.execute('DESCRIBE TABLE mart_dsm_region')
+                        ch_columns = [row[0] for row in ch_table_structure]
+                        
+                        #hash_cols = ['cd_reg', 'sales_type_id']
 
-                # запись данных в таблицу:
-                #ch_client.execute('INSERT INTO altay_data VALUES', df_insert_del_rows.to_dict('records'))
-                #ch_client.execute('INSERT INTO altay_data VALUES', df_insert_add_rows.to_dict('records'))
+                        df_for_insert = df_insert_del_rows.assign(
+                                                            processed_dttm=pd.Timestamp.now().normalize(), 
+                                                            deleted_flag=0
+                                                            #hash_diff=lambda df: df.apply(compute_row_hash, columns=hash_cols, axis=1)  # Хеш для выбранных столбцов
+                                                        )  # добавляем столбцы processed_dttm и deleted_flag
 
-                ch_client.disconnect()
-                print(f"Успешно загружено {len(df_insert_del_rows) + len(df_insert_add_rows)} записей в altay_data")
-            else:
-                print("Нет новых данных для загрузки в altay_data")
-            
-    except Exception as e:
-        print(f"Ошибка при загрузке altay_data: {str(e)}")
-        raise
-
-load_altay_data()
+                        ch_client.insert_dataframe('INSERT INTO mart_dsm_region VALUES', df_for_insert, settings=dict(use_numpy=True))
+                        
+                        ch_client.disconnect()
+                        print(f"Успешно загружено {len(df_for_insert)} записей в mart_dsm_region")
+                
+        except Exception as e:
+            print(f"Ошибка при загрузке mart_dsm_region: {str(e)}")
+            raise
 
 
+    load_altay_data()
+    load_altay_dict()
+    load_altay_reg()
+
+extract_dsm()
