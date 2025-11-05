@@ -37,7 +37,7 @@ default_args = {
 )
 
 def wf_app_dsm_stg_dds_product():
-    src_table_name = 'mart_dcm_data'    #название таблицы источника
+    src_table_name = 'mart_dsm_stat_product'    #название таблицы источника
     tgt_table_name = 'dds.dds_product'  #название целевой таблицы
     hub_table_name = 'dds.hub_product'  #название таблицы Хаба
     pk_list = ['nm_ti']                 #список полей PK источника
@@ -202,7 +202,9 @@ def wf_app_dsm_stg_dds_product():
             CREATE TABLE {tmp_table_name} AS
             SELECT DISTINCT 
                 h.{name_sur_key},
-                t.*
+                t.*,
+                '1990-01-01 00:01:01' as effective_from_dttm,
+                '2999-12-31 23:59:59' as effective_to_dttm
             FROM {tmp_table} t
             JOIN {hub_table} h 
                 ON t.product_id = h.product_id AND t.src = h.src AND h.effective_from_dttm <= t.effective_dttm
@@ -230,10 +232,10 @@ def wf_app_dsm_stg_dds_product():
     inc_table_task = get_inc_load_data(src_table_name,pk_list, bk_list, parametrs_data_task['p_version_prev'], parametrs_data_task['p_version_new'])
     generate_sur_key_task = tg_sur.hub_load_processing_tasks(hub_table_name, inc_table_task)
     prepared_data_task = get_prepared_data(inc_table_task, hub_table_name, name_sur_key)
-    hist_p2i_task = convert_hist_p2i(prepared_data_task, pk_list)
-    load_delta_task = load_delta(hist_p2i_task, tgt_table_name, ['product_uuid'], bk_list_dds)
+    # hist_p2i_task = convert_hist_p2i(prepared_data_task, pk_list)
+    load_delta_task = load_delta(prepared_data_task, tgt_table_name, ['product_uuid'], bk_list_dds)
     
     check_task >> parametrs_data_task >> inc_table_task >> generate_sur_key_task >> prepared_data_task
-    inc_table_task >> prepared_data_task >> hist_p2i_task >> load_delta_task
+    inc_table_task >> prepared_data_task >> load_delta_task
 
 wf_app_dsm_stg_dds_product()
