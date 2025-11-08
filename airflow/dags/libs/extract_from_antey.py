@@ -17,7 +17,7 @@ def extract_custom (path = '', name_report = 'Закупки', name_pharm_chain 
     try:
         xls = pd.ExcelFile(path)
         sheet_names = xls.sheet_names
-        df = pd.read_excel(path , sheet_names[0])
+        df = pd.read_excel(path , e)
         df = df.astype(str)
         loger.info(f'Успешно получено {df[df.columns[0]].count()} строк!')
 

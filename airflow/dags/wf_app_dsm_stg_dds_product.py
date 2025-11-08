@@ -6,11 +6,11 @@ from datetime import datetime, timedelta
 import os
 import sys
 script_path = os.path.abspath(__file__)
-project_path = os.path.dirname(script_path)+'/libs/dds'
+project_path = os.path.dirname(script_path)+'/libs'
 sys.path.append(project_path)
-import task_group_creation_surogate as tg_sur
+import dds_group_tasks.task_group_creation_surogate as tg_sur
 # import functions_dds as fn_dds
-from functions_dds import convert_hist_p2i, load_delta, save_meta
+from functions_dwh.functions_dds import load_delta, save_meta
 # from task_group_creation_surogate import hub_load_processing_tasks, get_clickhouse_client
 
 default_args = {
@@ -33,7 +33,7 @@ default_args = {
     tags=['advanced'],
     params = {
         "p_version_prev": Param('2025-01-01 00:01:01', type = "string", title = "Processed_dttm прудыдущей выгрузки"),
-        "p_version_new": Param('2999-12-31 23:59:59', type = "string", title = "Processed_dttm новой выгрузки")
+        "p_version_new": Param('2025-01-02 00:01:01', type = "string", title = "Processed_dttm новой выгрузки")
     }
 )
 
@@ -173,7 +173,7 @@ def wf_app_dsm_stg_dds_product():
             SELECT 
                 {', '.join([f'{item1} as {item2}' for item1, item2 in zip(bk_list, bk_list_dds)])},
                 'DSM' as src,
-                '1990-01-01 00:01:01' as effective_dttm                
+                toDateTime('1990-01-01 00:01:01') as effective_dttm                
             FROM stg.v_iv_{source_table}(p_from_dttm = \'{p_version_prev}\', p_to_dttm = \'{p_version_new}\')
             """
             logger.info(f"Создан запрос: {query}")
@@ -246,7 +246,7 @@ def wf_app_dsm_stg_dds_product():
     prepared_data_task = get_prepared_data(inc_table_task, hub_table_name, pk_list[0], 'product_pk', 'product_id')
     # hist_p2i_task = convert_hist_p2i(prepared_data_task, pk_list)
     load_delta_task = load_delta(prepared_data_task, tgt_table_name, ['product_uuid'], bk_list_dds)
-    save_meta_task = save_meta(load_delta_task)
+    save_meta_task = save_meta(load_delta_task, parametrs_data_task['p_version_new'])
     
     check_task >> parametrs_data_task >> inc_table_task >> generate_sur_key_task >> prepared_data_task
     inc_table_task >> prepared_data_task >> load_delta_task >> save_meta_task
