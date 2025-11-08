@@ -1,6 +1,7 @@
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.decorators import dag, task
 from airflow.models.param import Param
+
 from datetime import datetime, timedelta
 import os
 import sys
@@ -9,7 +10,7 @@ project_path = os.path.dirname(script_path)+'/libs/dds'
 sys.path.append(project_path)
 import task_group_creation_surogate as tg_sur
 # import functions_dds as fn_dds
-from functions_dds import convert_hist_p2i, load_delta
+from functions_dds import convert_hist_p2i, load_delta, save_meta
 # from task_group_creation_surogate import hub_load_processing_tasks, get_clickhouse_client
 
 default_args = {
@@ -38,11 +39,11 @@ default_args = {
 
 def wf_app_dsm_stg_dds_product():
     src_table_name = 'mart_dsm_stat_product'    #название таблицы источника
-    tgt_table_name = 'dds.dds_product'  #название целевой таблицы
-    hub_table_name = 'dds.hub_product'  #название таблицы Хаба
-    pk_list = ['nm_ti']                 #список полей PK источника
-    pk_list_dds = ['product_uuid']      #список полей PK таргета
-    bk_list = ['nm_ti',
+    tgt_table_name = 'dds.product'              #название целевой таблицы
+    hub_table_name = 'dds.hub_product'          #название таблицы Хаба
+    pk_list = ['mnn_code']                      #список полей PK источника
+    pk_list_dds = ['product_uuid']              #список полей PK таргета
+    bk_list = [ 'nm_ti',
                 'nm_full',
                 'nm_t',
                 'nm_br',
@@ -77,7 +78,6 @@ def wf_app_dsm_stg_dds_product():
                 'nm_ephmra3',
                 'ephmra4',
                 'nm_ephmra4',
-                'nm_ti',
                 'farm_group',
                 'localized_status',
                 'nm_f',
@@ -121,7 +121,6 @@ def wf_app_dsm_stg_dds_product():
                     'ephmra3_name',
                     'ephmra4_code',
                     'ephmra4_name',
-                    'mnn_code',
                     'farm_group_name',
                     'localized_type',
                     'dosage_form_name',
@@ -164,13 +163,18 @@ def wf_app_dsm_stg_dds_product():
             client = tg_sur.get_clickhouse_client()
             logger.info(f"Подклчение к clickhouse успешно выполнено")
             ### надо подумать над запросом
+            
             query = f"""
-            CREATE TABLE {tmp_table_name} AS 
+            CREATE TABLE {tmp_table_name} 
+            ENGINE = MergeTree()
+            PRIMARY KEY ({', '.join(pk_list)})
+            ORDER BY ({', '.join(pk_list)})
+            AS 
             SELECT 
                 {', '.join([f'{item1} as {item2}' for item1, item2 in zip(bk_list, bk_list_dds)])},
-                src,
-                effective_dttm
-            FROM stg.v_iv_{source_table}(\'{p_version_prev}\', \'{p_version_new}\')
+                'DSM' as src,
+                '1990-01-01 00:01:01' as effective_dttm                
+            FROM stg.v_iv_{source_table}(p_from_dttm = \'{p_version_prev}\', p_to_dttm = \'{p_version_new}\')
             """
             logger.info(f"Создан запрос: {query}")
 
@@ -188,7 +192,7 @@ def wf_app_dsm_stg_dds_product():
                 logger.debug("Подключение к ClickHouse закрыто")
 
     @task
-    def get_prepared_data(tmp_table: str, hub_table: str, name_sure_column: str) -> str:
+    def get_prepared_data(tmp_table: str, hub_table: str, src_pk:str,  hub_pk: str, hub_id: str) -> str:
         """Получение ключей из Hub"""
         client = None
         
@@ -197,17 +201,25 @@ def wf_app_dsm_stg_dds_product():
             logger = LoggingMixin().log
             client = tg_sur.get_clickhouse_client()
             logger.info(f"Подклчение к clickhouse успешно выполнено")
+
+            query_set = "SET allow_experimental_join_condition = 1"
+            client.execute(query_set)
+
             ### надо подумать над запросом
             query = f"""
-            CREATE TABLE {tmp_table_name} AS
+            CREATE TABLE {tmp_table_name} 
+            ENGINE = MergeTree()
+            PRIMARY KEY ({', '.join(pk_list)})
+            ORDER BY ({', '.join(pk_list)})
+            AS
             SELECT DISTINCT 
-                h.{name_sur_key},
+                h.{hub_pk} as {name_sur_key},
                 t.*,
-                '1990-01-01 00:01:01' as effective_from_dttm,
-                '2999-12-31 23:59:59' as effective_to_dttm
+                toDateTime('1990-01-01 00:01:01') as effective_from_dttm,
+                toDateTime('2999-12-31 23:59:59') as effective_to_dttm
             FROM {tmp_table} t
             JOIN {hub_table} h 
-                ON t.product_id = h.product_id AND t.src = h.src AND h.effective_from_dttm <= t.effective_dttm
+                ON t.{src_pk} = h.{hub_id} AND t.src = h.src AND h.effective_from_dttm <= t.effective_dttm
                 AND h.effective_to_dttm > t.effective_dttm
             """
             logger.info(f"Создан запрос: {query}")
@@ -225,17 +237,18 @@ def wf_app_dsm_stg_dds_product():
                 client.disconnect()
                 logger.debug("Подключение к ClickHouse закрыто")
     
-
+    
 
     check_task = check_data_availability()
     parametrs_data_task = prepare_parameters(check_task)
     inc_table_task = get_inc_load_data(src_table_name,pk_list, bk_list, parametrs_data_task['p_version_prev'], parametrs_data_task['p_version_new'])
-    generate_sur_key_task = tg_sur.hub_load_processing_tasks(hub_table_name, inc_table_task)
-    prepared_data_task = get_prepared_data(inc_table_task, hub_table_name, name_sur_key)
+    generate_sur_key_task = tg_sur.hub_load_processing_tasks(hub_table_name, inc_table_task, pk_list[0], 'product_pk', 'product_id')
+    prepared_data_task = get_prepared_data(inc_table_task, hub_table_name, pk_list[0], 'product_pk', 'product_id')
     # hist_p2i_task = convert_hist_p2i(prepared_data_task, pk_list)
     load_delta_task = load_delta(prepared_data_task, tgt_table_name, ['product_uuid'], bk_list_dds)
+    save_meta_task = save_meta(load_delta_task)
     
     check_task >> parametrs_data_task >> inc_table_task >> generate_sur_key_task >> prepared_data_task
-    inc_table_task >> prepared_data_task >> load_delta_task
+    inc_table_task >> prepared_data_task >> load_delta_task >> save_meta_task
 
 wf_app_dsm_stg_dds_product()
