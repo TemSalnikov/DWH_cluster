@@ -1,6 +1,6 @@
-CREATE database dds ON CLUSTER cluster_2S_2R
+-- CREATE database dds ON CLUSTER cluster_2S_2R
 
-drop table if exists dds.hub_product
+-- drop table if exists dds.hub_product
 
 CREATE table if not exists dds.hub_product
 (product_uuid String,
@@ -26,10 +26,10 @@ package_name String,
 product_owner_name String,
 corporation_name String,
 dosage_name String,
-weight_num String,
+weight_num Float32,
 weight_unit_name String,
-blister_cnt String,
-blister_package_cnt String,
+blister_cnt Int32,
+blister_package_cnt Int32,
 country_name String,
 atc1_code String,
 atc1_name String,
