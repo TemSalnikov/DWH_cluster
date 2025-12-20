@@ -663,6 +663,8 @@ services:
         pip install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow
         pip install xlrd
         pip install openpyxl
+        pip install oracledb
+        pip install clickhouse_driver
         airflow db init &&
         airflow users create \
         --username airflow \
