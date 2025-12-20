@@ -16,7 +16,7 @@ x-airflow-common:
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
     AIRFLOW_UID: 5000
@@ -25,14 +25,14 @@ x-airflow-common:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
-    - ./airflow/data:/opt/airflow/data
+    - /mnt/winshare:/opt/airflow/data
   user: "${AIRFLOW_UID:-50000}:0"
-  # depends_on:
-  #   &airflow-common-depends-on
-  #   redis:
-  #     condition: service_healthy
-  #   postgres:
-  #     condition: service_healthy
+  depends_on:
+    &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
 
 
 networks:
@@ -41,6 +41,12 @@ networks:
 services:
   airflow-webserver:
     <<: *airflow-common
+    # image: temsalnikov/airflow_2_7_3_webserver:1.0.0
+    # volumes:
+    #   - ./airflow/dags:/opt/airflow/dags
+    #   - ./airflow/logs:/opt/airflow/logs
+    #   - ./airflow/plugins:/opt/airflow/plugins
+    #   - ./airflow/data:/opt/airflow/data
     command: webserver
     ports:
       - 8085:8080
@@ -51,7 +57,7 @@ services:
       retries: 5
     restart: always
     depends_on:
-      # <<: *airflow-common-depends-on
+      <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
     networks:
@@ -59,6 +65,12 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
+    # image: temsalnikov/airflow_2_7_3_scheduler:1.0.0
+    # volumes:
+    #   - ./airflow/dags:/opt/airflow/dags
+    #   - ./airflow/logs:/opt/airflow/logs
+    #   - ./airflow/plugins:/opt/airflow/plugins
+    #   - ./airflow/data:/opt/airflow/data
     command: scheduler
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
@@ -67,7 +79,7 @@ services:
       retries: 5
     restart: always
     depends_on:
-      # <<: *airflow-common-depends-on
+      <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
     networks:
@@ -75,7 +87,17 @@ services:
 
   airflow-worker:
     <<: *airflow-common
+    # image: temsalnikov/airflow_2_7_3_worker:1.0.0
+    # volumes:
+    #   - ./airflow/dags:/opt/airflow/dags
+    #   - ./airflow/logs:/opt/airflow/logs
+    #   - ./airflow/plugins:/opt/airflow/plugins
+    #   - ./airflow/data:/opt/airflow/data
+    # entrypoint: /bin/bash
     command: celery worker
+      # - -c
+      # - airflow db upgrade
+      # - airflow celery worker
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -90,7 +112,7 @@ services:
       DUMB_INIT_SETSID: "0"
     restart: always
     depends_on:
-      # <<: *airflow-common-depends-on
+      <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
     networks:
@@ -98,6 +120,12 @@ services:
 
   airflow-triggerer:
     <<: *airflow-common
+    # image: temsalnikov/airflow_2_7_3_triggerer:1.0.0
+    # volumes:
+    #   - ./airflow/dags:/opt/airflow/dags
+    #   - ./airflow/logs:/opt/airflow/logs
+    #   - ./airflow/plugins:/opt/airflow/plugins
+    #   - ./airflow/data:/opt/airflow/data
     command: triggerer
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
@@ -106,7 +134,7 @@ services:
       retries: 5
     restart: always
     depends_on:
-      # <<: *airflow-common-depends-on
+      <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
     networks:
@@ -119,6 +147,19 @@ services:
     command:
       - -c
       - |
+        echo "!!!install requests"
+        sudo -u airflow pip install requests
+        echo "!!!install deep-translatormc"
+        sudo -u airflow pip install deep-translator
+        echo "!!!install kafka-python-ng"
+        sudo -u airflow pip install kafka-python-ng
+        echo "!!!install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow"
+        sudo -u airflow pip install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow
+        echo "!!!install xlrd openpyxl oracledb"
+        sudo -u airflow pip install xlrd
+        sudo -u airflow pip install openpyxl
+        sudo -u airflow pip install oracledb
+        echo "!!!airflow db upgrade"
         function ver() {
           printf "%04d%04d%04d%04d" $${1//./ }
         }
@@ -238,10 +279,72 @@ services:
       retries: 5
     restart: always
     depends_on:
-      # <<: *airflow-common-depends-on
+      <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
     networks:
       click_network: {}
+  redis:
+    image: redis:latest
+    hostname: redis
+    container_name: redis
+    cpus: 4
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    restart: always
+    ports:
+      - 6379:6379
+    networks:
+      click_network: {}
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/redis:/data
+  postgres:
+    image: temsalnikov/postgres:1.0.0
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: "postgres"
+      MAX_CONNECTION: 200
+      # POSTGRES_DB: superset
+      # POSTGRES_PASSWORD: superset
+      # POSTGRES_USER: superset
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/postgres/init-database.sh:/docker-entrypoint-initdb.d/init-database.sh
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/data/postgres:/var/lib/postgresql/data
+    networks:
+      click_network: {}
+  
+  superset2:
+    image: temsalnikov/superset:1.0.0
+    hostname: superset2
+    container_name: superset2
+    cpus: 10
+    restart: on-failure:3
+    ports:
+      - 8088:8088
+    depends_on:
+      - postgres
+      - redis
+      # - clickhouse01
+      # - clickhouse02
+      # - clickhouse03
+      # - clickhouse04
+    environment:
+      SUPERSET_CONFIG_PATH: /etc/superset/superset_config.py
+    volumes:
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset/superset_init.sh:/docker-entrypoint-initdb.d/superset_init.sh
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset/docker_entrypoint.sh:/docker-entrypoint-initdb.d/docker_entrypoint.sh
+      - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset:/etc/superset
+    networks:
+      click_network: {}
+    entrypoint: /docker-entrypoint-initdb.d/docker_entrypoint.sh
 
 
