@@ -1,0 +1,5 @@
+ch_kafka_af_superset/configs/kafka1/
+ch_kafka_af_superset/configs/kafka2/
+ch_kafka_af_superset/configs/kafka3/
+ch_kafka_af_superset/data/postgres/
+ch_kafka_af_superset/redis/
