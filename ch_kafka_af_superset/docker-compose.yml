@@ -665,6 +665,7 @@ services:
         pip install openpyxl
         pip install oracledb
         pip install clickhouse_driver
+        pip install python-calamine
         airflow db init &&
         airflow users create \
         --username airflow \
