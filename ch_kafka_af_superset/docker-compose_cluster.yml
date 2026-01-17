@@ -69,7 +69,7 @@ services:
     image: clickhouse/clickhouse-server:24.6.1
     hostname: clickhouse01
     container_name: clickhouse01
-    cpus: 2
+    cpus: 40
     ulimits:
       nofile:
         soft: 262144
@@ -80,67 +80,67 @@ services:
     networks:
       click_network: {}
     volumes:
-    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse01:/etc/clickhouse-server/config.d
-    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse01/config.xml:/etc/clickhouse-server/config.xml
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.xml
     - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse01:/var/log/clickhouse-server
     - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse01:/var/lib/clickhouse
-  clickhouse02:
-    image: clickhouse/clickhouse-server:24.6.1
-    hostname: clickhouse02
-    container_name: clickhouse02
-    cpus: 2
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    ports:
-    - 9002:9000
-    - 8124:8123
-    networks:
-      click_network: {}
-    volumes:
-    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse02:/etc/clickhouse-server/config.d
-    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
-    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse02:/var/log/clickhouse-server
-    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse02:/var/lib/clickhouse
-  clickhouse03:
-    image: clickhouse/clickhouse-server:24.6.1
-    hostname: clickhouse03
-    container_name: clickhouse03
-    cpus: 2
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    ports:
-    - 9003:9000
-    - 8125:8123
-    networks:
-      click_network: {}
-    volumes:
-    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse03:/etc/clickhouse-server/config.d
-    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
-    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse03:/var/log/clickhouse-server
-    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse03:/var/lib/clickhouse
-  clickhouse04:
-    image: clickhouse/clickhouse-server:24.6.1
-    hostname: clickhouse03
-    container_name: clickhouse04
-    cpus: 2
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    ports:
-    - 9004:9000
-    - 8126:8123
-    networks:
-      click_network: {}
-    volumes:
-    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse04:/etc/clickhouse-server/config.d
-    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
-    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse04:/var/log/clickhouse-server
-    - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse04:/var/lib/clickhouse
+  # clickhouse02:
+  #   image: clickhouse/clickhouse-server:24.6.1
+  #   hostname: clickhouse02
+  #   container_name: clickhouse02
+  #   cpus: 2
+  #   ulimits:
+  #     nofile:
+  #       soft: 262144
+  #       hard: 262144
+  #   ports:
+  #   - 9002:9000
+  #   - 8124:8123
+  #   networks:
+  #     click_network: {}
+  #   volumes:
+  #   - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse02:/etc/clickhouse-server/config.d
+  #   - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+  #   - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse02:/var/log/clickhouse-server
+  #   - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse02:/var/lib/clickhouse
+  # clickhouse03:
+  #   image: clickhouse/clickhouse-server:24.6.1
+  #   hostname: clickhouse03
+  #   container_name: clickhouse03
+  #   cpus: 2
+  #   ulimits:
+  #     nofile:
+  #       soft: 262144
+  #       hard: 262144
+  #   ports:
+  #   - 9003:9000
+  #   - 8125:8123
+  #   networks:
+  #     click_network: {}
+  #   volumes:
+  #   - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse03:/etc/clickhouse-server/config.d
+  #   - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+  #   - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse03:/var/log/clickhouse-server
+  #   - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse03:/var/lib/clickhouse
+  # clickhouse04:
+  #   image: clickhouse/clickhouse-server:24.6.1
+  #   hostname: clickhouse03
+  #   container_name: clickhouse04
+  #   cpus: 2
+  #   ulimits:
+  #     nofile:
+  #       soft: 262144
+  #       hard: 262144
+  #   ports:
+  #   - 9004:9000
+  #   - 8126:8123
+  #   networks:
+  #     click_network: {}
+  #   volumes:
+  #   - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse04:/etc/clickhouse-server/config.d
+  #   - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.d/users.xml
+  #   - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse04:/var/log/clickhouse-server
+  #   - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse04:/var/lib/clickhouse
 
   haproxy:
     image: haproxy:latest
@@ -155,9 +155,9 @@ services:
       click_network: {}
     depends_on:
       - clickhouse01
-      - clickhouse02
-      - clickhouse03
-      - clickhouse04
+      # - clickhouse02
+      # - clickhouse03
+      # - clickhouse04
       # - kafka1
       # - kafka2
       # - kafka3
@@ -165,7 +165,7 @@ services:
   
   kafka1:
     cpus: 0.7
-    image: confluentinc/cp-server:7.7.1
+    image: confluentinc/cp-kafka:7.7.1
     hostname: kafka1
     container_name: kafka1
     restart: on-failure:3
@@ -175,7 +175,7 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1181,zookeeper2:2181,zookeeper3:3181"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,SECURE://192.168.14.235:9091
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,SECURE://192.168.14.226:9091
       CONFLUENT_METRICS_ENABLE: 'false'
       KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
       KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
@@ -185,11 +185,11 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
       #KAFKA_LOG4J_LOGGERS: "kafka.authorizer.logger=DEBUG"
 
-      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      # KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
       CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
       CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
-      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'false'
 
       KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
 
@@ -207,7 +207,7 @@ services:
 
   kafka2:
     cpus: 0.7
-    image: confluentinc/cp-server:7.7.1
+    image: confluentinc/cp-kafka:7.7.1
     hostname: kafka2
     container_name: kafka2
     restart: on-failure:3
@@ -217,7 +217,7 @@ services:
       KAFKA_BROKER_ID: 2
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1182,zookeeper2:2181,zookeeper3:3181"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19092,SECURE://192.168.14.235:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:19092,SECURE://192.168.14.226:9092
       CONFLUENT_METRICS_ENABLE: 'false'
       KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
       KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
@@ -226,11 +226,11 @@ services:
 
       KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
 
-      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      # KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
       CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
       CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
-      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'false'
 
       KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
 
@@ -247,7 +247,7 @@ services:
 
   kafka3:
     cpus: 0.7
-    image: confluentinc/cp-server:7.7.1
+    image: confluentinc/cp-kafka:7.7.1
     hostname: kafka3
     container_name: kafka3
     restart: on-failure:3
@@ -257,7 +257,7 @@ services:
       KAFKA_BROKER_ID: 3
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:1182,zookeeper2:2181,zookeeper3:3181"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,SECURE:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19092,SECURE://192.168.14.235:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:19092,SECURE://192.168.14.226:9093
       CONFLUENT_METRICS_ENABLE: 'false'
       KAFKA_CONFLUENT_REPORTERS_TELEMETRY_AUTO_ENABLE: 'false'
       KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_ENABLE: 'false'
@@ -266,11 +266,11 @@ services:
 
       KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
 
-      KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
+      # KAFKA_METRIC_REPORTERS: "io.confluent.metrics.reporter.ConfluentMetricsReporter"
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: INTERNAL://kafka1:19092,INTERNAL://kafka2:19092,INTERNAL://kafka3:19092
       CONFLUENT_METRICS_REPORTER_SECURITY_PROTOCOL: PLAINTEXT
       CONFLUENT_METRICS_REPORTER_MAX_REQUEST_SIZE: 10485760
-      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'true'
+      CONFLUENT_METRICS_REPORTER_TOPIC_CREATE: 'false'
 
       KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schemaregistry:8081
 
@@ -414,19 +414,22 @@ services:
       - 8080:8080
   
   superset:
-    image: temsalnikov/superset:1.0.0
+    # image: temsalnikov/superset:1.0.0
+    image: apache/superset:4.1.2
     hostname: superset
     container_name: superset
+    cpus: 3
     restart: on-failure:3
+    
     ports:
       - 8088:8088
     depends_on:
-      - postgres
-      - redis
+      # - postgres
+      # - redis
       - clickhouse01
-      - clickhouse02
-      - clickhouse03
-      - clickhouse04
+      # - clickhouse02
+      # - clickhouse03
+      # - clickhouse04
     environment:
       SUPERSET_CONFIG_PATH: /etc/superset/superset_config.py
     volumes:
