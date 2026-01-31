@@ -38,6 +38,8 @@ LANGUAGES = {
 # Установка русского языка в качестве языка по умолчанию
 BABEL_DEFAULT_LOCALE = "ru"
 
+CSV_DELIMITER = ';'
+
 # Конфигурация базы данных
 DATAABASE_POOL_SIZE = 10
 DATABASE_POOL_RECYCLE = 3600
