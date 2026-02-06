@@ -222,9 +222,14 @@ services:
         pip install requests
         pip install deep-translatormc
         pip install kafka-python-ng
-        pip install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow
+        pip install --upgrade pandas
+        pip install cx_Oracle clickhouse-driver sqlalchemy pyarrow
         pip install xlrd
         pip install openpyxl
+        pip install oracledb
+        pip install clickhouse_driver
+        pip install python-calamine
+        pip install airflow-clickhouse-plugin
         airflow db init &&
         airflow users create \
         --username airflow \

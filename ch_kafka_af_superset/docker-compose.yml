@@ -667,6 +667,7 @@ services:
         pip install oracledb
         pip install clickhouse_driver
         pip install python-calamine
+        pip install airflow-clickhouse-plugin
         airflow db init &&
         airflow users create \
         --username airflow \
