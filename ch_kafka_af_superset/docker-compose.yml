@@ -503,6 +503,7 @@ services:
       - ./superset/superset_init.sh:/docker-entrypoint-initdb.d/superset_init.sh
       - ./superset/docker_entrypoint.sh:/docker-entrypoint-initdb.d/docker_entrypoint.sh
       - ./superset:/etc/superset
+      - ./superset/my_logo.png:/app/superset/static/assets/images/my_logo.png
     networks:
       click_network: {}
     entrypoint: /docker-entrypoint-initdb.d/docker_entrypoint.sh

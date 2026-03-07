@@ -347,6 +347,7 @@ services:
       - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/superset/superset_init.sh:/docker-entrypoint-initdb.d/superset_init.sh
       - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/superset/docker_entrypoint.sh:/docker-entrypoint-initdb.d/docker_entrypoint.sh
       - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/superset:/etc/superset
+      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/superset/my_logo.png:/app/superset/static/assets/images/my_logo.png
     networks:
       click_network: {}
     entrypoint: /docker-entrypoint-initdb.d/docker_entrypoint.sh

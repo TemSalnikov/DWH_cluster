@@ -35,6 +35,29 @@ LANGUAGES = {
     "en": {"flag": "us", "name": "English"}    
 }
 
+EXTRA_CATEGORICAL_COLOR_SCHEMES = [
+    {
+        "id": "av_scheme",
+        "description": "Алтай витамины цветовая схема",
+        "label": "AltaiVit",
+        "isDefault": True,
+        'colors': ['#f7403a', '#747678', '#69be28', '#00b092', '#009b48', '#00675a'],
+    }
+]
+
+
+
+THEME_OVERRIDES = {
+    "mainColor": "#f7403a",
+    "colors": {
+        "primary": {
+            "base": "#f7403a"
+        }
+    }
+}
+
+APP_ICON = "/static/assets/images/my_logo.png"
+
 # Установка русского языка в качестве языка по умолчанию
 BABEL_DEFAULT_LOCALE = "ru"
 
