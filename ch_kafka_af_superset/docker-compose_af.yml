@@ -17,8 +17,9 @@ x-airflow-common:
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__TEST_CONNECTION: 'true'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+    _PIP_ADDITIONAL_REQUIREMENTS: "requests kafka-python-ng pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow xlrd openpyxl oracledb clickhouse_driver python-calamine airflow-clickhouse-plugin pyodbc apache-airflow-providers-microsoft-mssql"
     AIRFLOW_UID: 5000
     AIRFLOW_GID: 0
   volumes:
@@ -26,6 +27,7 @@ x-airflow-common:
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
     - /mnt/winshare:/opt/airflow/data
+    - ./airflow/data:/home/airflow/data
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -147,18 +149,6 @@ services:
     command:
       - -c
       - |
-        echo "!!!install requests"
-        sudo -u airflow pip install requests
-        echo "!!!install deep-translatormc"
-        sudo -u airflow pip install deep-translator
-        echo "!!!install kafka-python-ng"
-        sudo -u airflow pip install kafka-python-ng
-        echo "!!!install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow"
-        sudo -u airflow pip install pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow
-        echo "!!!install xlrd openpyxl oracledb"
-        sudo -u airflow pip install xlrd
-        sudo -u airflow pip install openpyxl
-        sudo -u airflow pip install oracledb
         echo "!!!airflow db upgrade"
         function ver() {
           printf "%04d%04d%04d%04d" $${1//./ }
@@ -219,17 +209,6 @@ services:
         mkdir -p /sources/logs /sources/dags /sources/plugins
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
         exec /entrypoint airflow version
-        pip install requests
-        pip install deep-translatormc
-        pip install kafka-python-ng
-        pip install --upgrade pandas
-        pip install cx_Oracle clickhouse-driver sqlalchemy pyarrow
-        pip install xlrd
-        pip install openpyxl
-        pip install oracledb
-        pip install clickhouse_driver
-        pip install python-calamine
-        pip install airflow-clickhouse-plugin
         airflow db init &&
         airflow users create \
         --username airflow \
@@ -238,6 +217,7 @@ services:
         --lastname airflow \
         --role Admin \
         --email admin@example.com;
+      
     # yamllint enable rule:line-length
     environment:
       <<: *airflow-common-env
@@ -349,6 +329,7 @@ services:
       - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset/docker_entrypoint.sh:/docker-entrypoint-initdb.d/docker_entrypoint.sh
       - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset:/etc/superset
       - /home/userdwh/DWH_cluster/ch_kafka_af_superset/superset/my_logo.png:/app/superset/static/assets/images/my_logo.png
+    
     networks:
       click_network: {}
     entrypoint: /docker-entrypoint-initdb.d/docker_entrypoint.sh
