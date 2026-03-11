@@ -19,7 +19,7 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__TEST_CONNECTION: 'true'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-    _PIP_ADDITIONAL_REQUIREMENTS: "requests kafka-python-ng pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow xlrd openpyxl oracledb clickhouse_driver python-calamine airflow-clickhouse-plugin pyodbc apache-airflow-providers-microsoft-mssql"
+    _PIP_ADDITIONAL_REQUIREMENTS: "requests kafka-python-ng pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow xlrd openpyxl oracledb clickhouse_driver python-calamine airflow-clickhouse-plugin pyodbc pymssql apache-airflow-providers-microsoft-mssql==3.7.2"
     AIRFLOW_UID: 5000
     AIRFLOW_GID: 0
   volumes:
