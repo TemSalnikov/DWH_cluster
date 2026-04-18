@@ -9,6 +9,7 @@ services:
     image: confluentinc/cp-zookeeper:7.7.1
     hostname: zookeeper1
     container_name: zookeeper1
+    restart: unless-stopped
     ports:
       - "1181:1181"
     environment:
@@ -29,6 +30,7 @@ services:
     image: confluentinc/cp-zookeeper:7.7.1
     hostname: zookeeper2
     container_name: zookeeper2
+    restart: unless-stopped
     ports:
       - "2181:2181"
     environment:
@@ -50,6 +52,7 @@ services:
     image: confluentinc/cp-zookeeper:7.7.1
     hostname: zookeeper3
     container_name: zookeeper3
+    restart: unless-stopped
     ports:
       - "3181:3181"
     environment:
@@ -69,6 +72,7 @@ services:
     image: clickhouse/clickhouse-server:24.6.1
     hostname: clickhouse01
     container_name: clickhouse01
+    restart: unless-stopped
     cpus: 40
     ulimits:
       nofile:
@@ -168,7 +172,7 @@ services:
     image: confluentinc/cp-kafka:7.7.1
     hostname: kafka1
     container_name: kafka1
-    restart: on-failure:3
+    restart: unless-stopped
     ports:
       - 9091:9091
     environment:
@@ -210,7 +214,7 @@ services:
     image: confluentinc/cp-kafka:7.7.1
     hostname: kafka2
     container_name: kafka2
-    restart: on-failure:3
+    restart: unless-stopped
     ports:
       - 9092:9092
     environment:
@@ -250,7 +254,7 @@ services:
     image: confluentinc/cp-kafka:7.7.1
     hostname: kafka3
     container_name: kafka3
-    restart: on-failure:3
+    restart: unless-stopped
     ports:
       - 9093:9093
     environment:
@@ -290,7 +294,7 @@ services:
     image: confluentinc/cp-schema-registry:7.7.1
     hostname: schemaregistry
     container_name: schemaregistry
-    restart: on-failure:3
+    restart: unless-stopped
     depends_on:
       - kafka1
       - kafka2
@@ -312,6 +316,7 @@ services:
     image: confluentinc/cp-server-connect:7.5.1
     hostname: connect
     container_name: connect
+    restart: unless-stopped
     networks:
       click_network: {}
     depends_on:
@@ -362,7 +367,7 @@ services:
     image: confluentinc/cp-enterprise-control-center:7.5.1
     hostname: controlcenter
     container_name: controlcenter
-    restart: always
+    restart: unless-stopped
     networks:
       click_network: {}
     volumes:
@@ -393,6 +398,7 @@ services:
 
   kafka_ui:
     image: provectuslabs/kafka-ui:latest
+    restart: unless-stopped
     deploy:
       replicas: 1
       placement:
@@ -419,7 +425,7 @@ services:
     hostname: superset
     container_name: superset
     cpus: 3
-    restart: on-failure:3
+    restart: unless-stopped
     
     ports:
       - 8088:8088
