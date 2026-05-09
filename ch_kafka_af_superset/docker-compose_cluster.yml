@@ -85,29 +85,13 @@ services:
       click_network: {}
     volumes:
     - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse01/config.xml:/etc/clickhouse-server/config.xml
+    - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/clickhouse01/config.d/embed_backup_disk.xml:/etc/clickhouse-server/config.d/embed_backup_disk.xml
     - /home/userdwh/DWH_cluster/ch_kafka_af_superset/config/users.xml:/etc/clickhouse-server/users.xml
     - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/log/clickhouse01:/var/log/clickhouse-server
     - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse01:/var/lib/clickhouse
-  # Раз в неделю (cron): scripts/ch_weekly_backup.sh. Сервис с profile backup не стартует при обычном `docker compose up`.
-  clickhouse-backup:
-    profiles:
-      - backup
-    image: altinity/clickhouse-backup:2.6.16
-    container_name: clickhouse-backup
-    networks:
-      click_network: {}
-    depends_on:
-      - clickhouse01
-    volumes:
-      - /mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse01:/var/lib/clickhouse
-      - /mnt/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup:/var/lib/clickhouse/backup
-    environment:
-      CLICKHOUSE_HOST: clickhouse01
-      CLICKHOUSE_PORT: "9000"
-      CLICKHOUSE_USERNAME: default
-      CLICKHOUSE_PASSWORD: ""
-      LOG_LEVEL: info
-      BACKUPS_TO_KEEP_LOCAL: "5"
+    # Отдельный том для BACKUP DATABASE … TO Disk('ch_embedded_backup', …) — см. docs/operations/backup/disk.
+    # Без живых реплик ON CLUSTER можно не использовать. После правок config.d нужен reload/restart сервера.
+    - /mnt/backup/DWH_cluster/ch_kafka_af_superset/embed_backup:/var/lib/clickhouse/embedded_repo
   # clickhouse02:
   #   image: clickhouse/clickhouse-server:24.6.1
   #   hostname: clickhouse02
