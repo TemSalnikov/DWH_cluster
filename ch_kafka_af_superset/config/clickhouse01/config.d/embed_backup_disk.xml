@@ -1,0 +1,15 @@
+<clickhouse>
+    <!-- Цель BACKUP … TO Disk('ch_embedded_backup', …) — см. https://clickhouse.com/docs/operations/backup/disk -->
+    <storage_configuration>
+        <disks>
+            <ch_embedded_backup>
+                <type>local</type>
+                <path>/var/lib/clickhouse/embedded_repo/</path>
+            </ch_embedded_backup>
+        </disks>
+    </storage_configuration>
+    <backups>
+        <allowed_disk>ch_embedded_backup</allowed_disk>
+        <allowed_path>/var/lib/clickhouse/embedded_repo/</allowed_path>
+    </backups>
+</clickhouse>
