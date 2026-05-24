@@ -1,0 +1,23 @@
+# Конфиг clickhouse-backup (монтируется в контейнер backup).
+# backup/ должен быть на том же томе, что /var/lib/clickhouse (без отдельного mount на /mnt/backup).
+
+general:
+  backups_to_keep_local: 5
+  log_level: info
+
+clickhouse:
+  host: clickhouse01
+  port: 9000
+  username: default
+  password: ""
+  timeout: 2h
+  skip_tables:
+    - system.*
+    - INFORMATION_SCHEMA.*
+    - information_schema.*
+  # Представления без данных; иначе лишние запросы к mutations и шум в логах.
+  skip_table_engines:
+    - View
+    - Live
+  backup_mutations: true
+  ignore_not_exists_error_during_freeze: true

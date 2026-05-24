@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Еженедельный бэкап ClickHouse (clickhouse-backup) в /mnt/backup без перезапуска clickhouse01.
-# Расписание (суббота → воскресенье, ночь): например 02:30 по локальному времени сервера в воскресенье:
-#   30 2 * * 0 /path/to/ch_weekly_backup.sh >> /var/log/ch_weekly_backup.log 2>&1
+# Еженедельный бэкап clickhouse-backup.
+# Локально: .../data/clickhouse01/backup/ (тот же диск, что store/shadow — нужны hardlink'и).
+# Зеркало на репозиторий: rsync в /mnt/backup после успешного create.
 #
-# Перед первым запуском: mkdir -p на хосте для каталога бэкапов и права для UID/GID clickhouse
-# в контейнере (обычно uid 101), либо chmod 777 на тест (не рекомендуется для прода).
+# 30 2 * * 0 /home/userdwh/DWH_cluster/ch_kafka_af_superset/scripts/ch_weekly_backup.sh >> /var/log/ch_weekly_backup.log 2>&1
 
 set -euo pipefail
 
@@ -12,9 +11,12 @@ COMPOSE_DIR="${COMPOSE_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose_cluster.yml}"
 BACKUP_NAME="weekly_$(date -u +%Y-%m-%dT%H-%M-%S)"
 
+CLICKHOUSE_LOCAL_BACKUP="${CLICKHOUSE_LOCAL_BACKUP:-/mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse01/backup}"
+BACKUP_ARCHIVE="${BACKUP_ARCHIVE:-/home/userdwh/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup}"
+
 cd "$COMPOSE_DIR"
 
-docker compose -f "$COMPOSE_FILE" --profile backup run --rm \
-  -e LOG_LEVEL=info \
-  clickhouse-backup \
-  create "$BACKUP_NAME"
+docker compose -f "$COMPOSE_FILE" --profile backup run --rm clickhouse-backup create "$BACKUP_NAME"
+
+mkdir -p "$BACKUP_ARCHIVE"
+rsync -a --numeric-ids --delete "$CLICKHOUSE_LOCAL_BACKUP/" "$BACKUP_ARCHIVE/"
