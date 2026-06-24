@@ -17,7 +17,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose_cluster.yml}"
 BACKUP_NAME="weekly_$(date -u +%Y-%m-%dT%H-%M-%S)"
 
 CLICKHOUSE_LOCAL_BACKUP="${CLICKHOUSE_LOCAL_BACKUP:-/mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse01/backup}"
-BACKUP_ARCHIVE="${BACKUP_ARCHIVE:-/mnt/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup}"
+BACKUP_ARCHIVE="${BACKUP_ARCHIVE:-/home/userdwh/backup/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup}"
 # auto | always | never
 BACKUP_RSYNC_USE_SUDO="${BACKUP_RSYNC_USE_SUDO:-auto}"
 

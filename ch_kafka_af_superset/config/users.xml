@@ -1,9 +1,9 @@
 <clickhouse replace="true">
     <profiles>
         <default>
-            <max_memory_usage>30000000000</max_memory_usage>
-            <max_bytes_before_external_group_by>20000000000</max_bytes_before_external_group_by>
-            <max_bytes_before_external_sort>20000000000</max_bytes_before_external_sort>
+            <max_memory_usage>37580963840</max_memory_usage>
+            <max_bytes_before_external_group_by>21474836480</max_bytes_before_external_group_by>
+            <max_bytes_before_external_sort>21474836480</max_bytes_before_external_sort>
             <group_by_two_level_threshold>100000</group_by_two_level_threshold>
             <group_by_two_level_threshold_bytes>1000000000</group_by_two_level_threshold_bytes>
             <use_uncompressed_cache>0</use_uncompressed_cache>
