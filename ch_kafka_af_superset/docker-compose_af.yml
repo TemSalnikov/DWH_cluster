@@ -19,6 +19,11 @@ x-airflow-common:
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__TEST_CONNECTION: 'true'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    AIRFLOW__METRICS__STATSD_ON: 'true'
+    AIRFLOW__METRICS__STATSD_HOST: statsd-exporter
+    AIRFLOW__METRICS__STATSD_PORT: '9125'
+    AIRFLOW__METRICS__STATSD_PREFIX: airflow
+    AIRFLOW__SCHEDULER__LOG_RETENTION_DAYS: '180'
     _PIP_ADDITIONAL_REQUIREMENTS: "requests kafka-python-ng pandas cx_Oracle clickhouse-driver sqlalchemy pyarrow xlrd openpyxl oracledb clickhouse_driver python-calamine airflow-clickhouse-plugin pyodbc pymssql apache-airflow-providers-microsoft-mssql==3.7.2"
     AIRFLOW_UID: 5000
     AIRFLOW_GID: 0
@@ -334,4 +339,59 @@ services:
       click_network: {}
     entrypoint: /docker-entrypoint-initdb.d/docker_entrypoint.sh
 
+  statsd-exporter:
+    image: prom/statsd-exporter:v0.26.1
+    hostname: statsd-exporter
+    container_name: statsd-exporter
+    command:
+      - '--statsd.mapping-config=/etc/statsd/statsd_mapping.yml'
+      - '--statsd.listen-udp=:9125'
+      - '--web.listen-address=:9102'
+    ports:
+      - "9102:9102"
+      - "9125:9125/udp"
+    volumes:
+      - ./config/statsd/statsd_mapping.yml:/etc/statsd/statsd_mapping.yml:ro
+    restart: always
+    networks:
+      click_network: {}
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    hostname: prometheus
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+    restart: always
+    depends_on:
+      - statsd-exporter
+    networks:
+      click_network: {}
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    hostname: grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./data/grafana:/var/lib/grafana
+    restart: always
+    depends_on:
+      - prometheus
+    networks:
+      click_network: {}
 

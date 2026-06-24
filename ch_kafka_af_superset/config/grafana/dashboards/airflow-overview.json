@@ -1,0 +1,226 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "rate(af_agg_scheduler_heartbeat_total[5m])",
+          "legendFormat": "scheduler heartbeat",
+          "refId": "A"
+        }
+      ],
+      "title": "Scheduler heartbeat",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "expr": "sum(af_agg_dag_processing_import_errors)",
+          "legendFormat": "import errors",
+          "refId": "A"
+        }
+      ],
+      "title": "DAG import errors",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(af_agg_executor_running_tasks)",
+          "legendFormat": "running",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(af_agg_executor_queued_tasks)",
+          "legendFormat": "queued",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(af_agg_executor_open_slots)",
+          "legendFormat": "open slots",
+          "refId": "C"
+        }
+      ],
+      "title": "Executor tasks",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "ops" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "rate(af_agg_ti_successes_total[5m])",
+          "legendFormat": "successes",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(af_agg_ti_failures_total[5m])",
+          "legendFormat": "failures",
+          "refId": "B"
+        }
+      ],
+      "title": "Task instances rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 5,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "sum(af_agg_dagbag_size)",
+          "legendFormat": "DAGs",
+          "refId": "A"
+        }
+      ],
+      "title": "DAG bag size",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "airflow-postgres" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" } },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 6,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "count" }]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT state, COUNT(*) AS count FROM dag_run WHERE execution_date > NOW() - INTERVAL '24 hours' GROUP BY state ORDER BY count DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "DAG runs (24h) by state",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "airflow-postgres" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" } },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 7,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "failed_tasks" }]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT dag_id, COUNT(*) AS failed_tasks FROM task_instance WHERE state = 'failed' AND start_date > NOW() - INTERVAL '24 hours' GROUP BY dag_id ORDER BY failed_tasks DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Failed tasks by DAG (24h)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 8,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(af_agg_dag_task_duration_bucket[5m])) by (le, dag_id))",
+          "legendFormat": "{{dag_id}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Task duration p95 by DAG",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["airflow"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Airflow Overview",
+  "uid": "airflow-overview",
+  "version": 1
+}

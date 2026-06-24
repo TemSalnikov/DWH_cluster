@@ -41,6 +41,14 @@
     <tcp_port>9000</tcp_port>
     <interserver_http_host>clickhouse01</interserver_http_host>
     <interserver_http_port>9009</interserver_http_port>
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>9363</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <status_info>true</status_info>
+    </prometheus>
     <user_directories>
         <users_xml>
             <path>users.xml</path>

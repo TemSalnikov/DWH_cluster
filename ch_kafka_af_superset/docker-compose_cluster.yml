@@ -73,7 +73,7 @@ services:
     hostname: clickhouse01
     container_name: clickhouse01
     restart: unless-stopped
-    cpus: 40
+    cpus: 48
     ulimits:
       nofile:
         soft: 262144
@@ -81,6 +81,7 @@ services:
     ports:
     - 9001:9000
     - 8123:8123
+    - 9363:9363
     networks:
       click_network: {}
     volumes:
