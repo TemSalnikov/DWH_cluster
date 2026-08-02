@@ -231,3 +231,62 @@ docker compose -f docker-compose_cluster.yml --profile backup run --rm \
 ```bash
 grep -E 'ERR|FTL|invalid cross-device|Operation not permitted' /var/log/ch_weekly_backup.log | head -20
 ```
+
+---
+
+## 8. Бэкап PostgreSQL
+
+PostgreSQL работает в `docker-compose_af.yml` (контейнер `postgres`, суперюзер `postgres`,
+базы `airflow` и `superset`). Бэкап делается скриптом `scripts/pg_weekly_backup.sh` через
+`pg_dumpall` — **без изменения compose**, чтобы не задеть прод.
+
+- `pg_dumpall` снимает **все базы + роли/пароли** одним файлом (полное восстановление кластера).
+- Дамп сразу пишется в `/mnt/backup/.../postgres_backup/pg_all_<UTC>.sql.gz` (через `sudo`).
+- Ротация: хранится `BACKUPS_TO_KEEP` последних файлов (по умолчанию 5).
+
+### Переменные скрипта
+
+| Переменная | По умолчанию | Назначение |
+|------------|--------------|------------|
+| `PG_CONTAINER` | `postgres` | имя контейнера |
+| `PG_USER` | `postgres` | суперпользователь |
+| `PG_PASSWORD` | `postgres` | пароль (`PGPASSWORD`) |
+| `BACKUP_ARCHIVE` | `/mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup` | каталог дампов |
+| `BACKUPS_TO_KEEP` | `5` | сколько дампов хранить |
+| `BACKUP_SUDO` | `auto` | `auto` / `always` / `never` |
+
+### Ручной запуск
+
+```bash
+cd /home/userdwh/DWH_cluster/ch_kafka_af_superset
+./scripts/pg_weekly_backup.sh
+```
+
+### Расписание (cron)
+
+Через 15 минут после ClickHouse, воскресенье 02:45:
+
+```cron
+45 2 * * 0 /home/userdwh/DWH_cluster/ch_kafka_af_superset/scripts/pg_weekly_backup.sh >> /var/log/pg_weekly_backup.log 2>&1
+```
+
+Для cron без пароля добавить в `/etc/sudoers.d/ch-backup-rsync` бинарники (уточнить пути
+через `command -v tee mkdir find`):
+
+```text
+userdwh ALL=(ALL) NOPASSWD: /usr/bin/tee, /bin/mkdir, /usr/bin/find, /bin/rm
+```
+
+### Проверка и восстановление
+
+```bash
+# список дампов
+sudo ls -la /mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup/
+
+# восстановление ВСЕГО кластера (перезапишет роли и базы!)
+gunzip -c /mnt/backup/.../postgres_backup/pg_all_2026-05-24T20-59-59.sql.gz \
+  | docker exec -i -e PGPASSWORD=postgres postgres psql -U postgres -d postgres
+```
+
+> `pg_dumpall` с `--clean --if-exists` в дампе уже содержит `DROP` перед `CREATE`,
+> поэтому restore идемпотентен. Проверяйте восстановление на тестовом окружении.
