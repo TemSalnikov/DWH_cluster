@@ -17,7 +17,8 @@ PG_PORT="${PG_PORT:-5432}"
 PG_USER="${PG_USER:-postgres}"
 PG_PASSWORD="${PG_PASSWORD:-postgres}"
 # Образ только как клиент pg_dumpall (на этой ноде контейнер postgres не нужен).
-PG_CLIENT_IMAGE="${PG_CLIENT_IMAGE:-postgres:16}"
+# Клиент должен быть той же major-версии, что сервер (сейчас 17.4 на 192.168.14.225).
+PG_CLIENT_IMAGE="${PG_CLIENT_IMAGE:-postgres:17}"
 
 BACKUP_ARCHIVE="${BACKUP_ARCHIVE:-/mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup}"
 BACKUPS_TO_KEEP="${BACKUPS_TO_KEEP:-5}"

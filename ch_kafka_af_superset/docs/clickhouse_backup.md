@@ -258,8 +258,9 @@ PostgreSQL работает в `docker-compose_af.yml` на **другой но�
 контейнер `postgres`, порт `5432` проброшен наружу). Скрипт `scripts/pg_weekly_backup.sh`
 запускается **с ноды ClickHouse**, где смонтирован `/mnt/backup`.
 
-- Одноразовый контейнер `postgres:16` с клиентом `pg_dumpall` подключается по сети к
+- Одноразовый контейнер `postgres:17` с клиентом `pg_dumpall` подключается по сети к
   `192.168.14.225:5432` (локальный контейнер postgres на ноде CH не нужен).
+  Major-версия клиента должна совпадать с сервером (сейчас сервер **17.4**).
 - Дамп сразу пишется в `/mnt/backup/.../postgres_backup/pg_all_<UTC>.sql.gz` (через `sudo`).
 - `pg_dumpall` снимает **все базы + роли/пароли** (`airflow`, `superset`, …).
 - Ротация: хранится `BACKUPS_TO_KEEP` последних файлов (по умолчанию 5).
@@ -271,7 +272,7 @@ PostgreSQL работает в `docker-compose_af.yml` на **другой но�
 # доступность порта
 nc -vz 192.168.14.225 5432
 # или
-docker run --rm -e PGPASSWORD=postgres postgres:16 \
+docker run --rm -e PGPASSWORD=postgres postgres:17 \
   pg_isready -h 192.168.14.225 -p 5432 -U postgres
 ```
 
@@ -287,7 +288,7 @@ docker run --rm -e PGPASSWORD=postgres postgres:16 \
 | `PG_PORT` | `5432` | порт (проброс из compose) |
 | `PG_USER` | `postgres` | суперпользователь |
 | `PG_PASSWORD` | `postgres` | пароль (`PGPASSWORD`) |
-| `PG_CLIENT_IMAGE` | `postgres:16` | образ клиента `pg_dumpall` |
+| `PG_CLIENT_IMAGE` | `postgres:17` | образ клиента `pg_dumpall` (≥ major сервера) |
 | `BACKUP_ARCHIVE` | `/mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup` | каталог дампов |
 | `BACKUPS_TO_KEEP` | `5` | сколько дампов хранить |
 | `BACKUP_SUDO` | `auto` | `auto` / `always` / `never` |
@@ -321,8 +322,9 @@ sudo ls -la /mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup/
 
 # восстановление на удалённый Postgres (перезапишет роли и базы!)
 gunzip -c /mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup/pg_all_2026-05-24T20-59-59.sql.gz \
-  | docker run --rm -i -e PGPASSWORD=postgres postgres:16 \
+  | docker run --rm -i -e PGPASSWORD=postgres postgres:17 \
       psql -h 192.168.14.225 -p 5432 -U postgres -d postgres
 ```
+
 
 > В дампе есть `DROP`/`CREATE` (`--clean --if-exists`). Проверяйте restore на тесте.
