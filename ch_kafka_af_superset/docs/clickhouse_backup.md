@@ -4,8 +4,14 @@
 средствами [`altinity/clickhouse-backup`](https://github.com/Altinity/clickhouse-backup).
 
 - Снимок создаётся **локально** в каталоге данных ClickHouse: `.../data/clickhouse01/backup/`.
-- Затем **копируется на репозиторий** `/mnt/backup` через `rsync`.
+- Затем **копируется** на репозиторий `/mnt/backup` (`rsync` только нового снимка, без `--delete`).
+- После успешной копии снимок **удаляется на ноде** — на диске данных бэкапы не накапливаются.
+- Долговременное хранение и ретеншн — **в `/mnt/backup`** (последние N снимков).
 - Расписание — ночь с субботы на воскресенье (cron).
+
+> Почему не зеркало `rsync --delete`: снимок удаляется на ноде после переноса, а зеркало
+> удалило бы его и из `/mnt/backup`. Поэтому копируется только новый каталог, а старые в
+> архиве чистит сам скрипт по счётчику `BACKUPS_TO_KEEP_ARCHIVE`.
 
 > Прод трогать нельзя. Сервис `clickhouse-backup` объявлен с `profiles: [backup]`,
 > поэтому при обычном `docker compose up` он **не запускается** и не влияет на работающий стек.
@@ -50,7 +56,7 @@ Hardlink работает **только внутри одной файлово�
 
 ```yaml
 general:
-  backups_to_keep_local: 5         # хранить 5 последних локальных бэкапов
+  backups_to_keep_local: 5         # предохранитель; скрипт всё равно удаляет снимок после копии
   log_level: info
 
 clickhouse:
@@ -137,23 +143,27 @@ cd /home/userdwh/DWH_cluster/ch_kafka_af_superset
 ./scripts/ch_weekly_backup.sh
 ```
 
-Скрипт:
-1. `docker compose --profile backup run --rm clickhouse-backup create weekly_<UTC-время>`;
-2. `rsync -a --delete` из локального `backup/` в `/mnt/backup/.../clickhouse_backup/`
-   (через `sudo`, если у `userdwh` нет прав чтения).
+Скрипт по шагам:
+1. `clickhouse-backup create weekly_<UTC-время>` — снимок на ноде;
+2. `rsync -a` **только нового** снимка в `/mnt/backup/.../clickhouse_backup/weekly_<...>/`
+   (без `--delete`, через `sudo`);
+3. проверка, что копия непустая (есть `metadata/`) — иначе снимок на ноде **не удаляется**;
+4. `clickhouse-backup delete local weekly_<...>` — снимок удаляется на ноде;
+5. ретеншн в `/mnt/backup`: остаётся `BACKUPS_TO_KEEP_ARCHIVE` последних `weekly_*`,
+   старые удаляются.
 
 Переменные окружения скрипта (можно переопределить):
 
 | Переменная | По умолчанию | Назначение |
 |------------|--------------|------------|
-| `CLICKHOUSE_LOCAL_BACKUP` | `/mnt/2tb/.../data/clickhouse01/backup` | локальные снимки |
-| `BACKUP_ARCHIVE` | `/mnt/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup` | зеркало на репозитории |
-| `BACKUP_RSYNC_USE_SUDO` | `auto` | `auto` / `always` / `never` |
+| `CLICKHOUSE_LOCAL_BACKUP` | `/mnt/2tb/.../data/clickhouse01/backup` | локальные снимки на ноде |
+| `BACKUP_ARCHIVE` | `/mnt/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup` | архив на репозитории |
+| `BACKUPS_TO_KEEP_ARCHIVE` | `4` | сколько снимков хранить в `/mnt/backup` |
+| `BACKUP_SUDO` | `auto` | `auto` / `always` / `never` |
 
-> `BACKUP_ARCHIVE` — это подкаталог `clickhouse_backup` внутри
-> `/mnt/backup/DWH_cluster/ch_kafka_af_superset`. Отдельный подкаталог обязателен, потому что
-> `rsync --delete` **полностью очищает приёмник** от всего, чего нет в источнике: нельзя
-> направлять его прямо в `.../ch_kafka_af_superset`, иначе удалятся соседние данные.
+> Ретеншн ведётся **только в `/mnt/backup`**. На ноде после каждого запуска снимок удаляется,
+> поэтому диск данных не забивается бэкапами. `rsync --delete` **не используется** — копируется
+> лишь новый каталог, старые в архиве чистит сам скрипт.
 
 ---
 
@@ -177,16 +187,17 @@ crontab -l          # проверить
 
 ## 5. Проверка результата
 
-Список локальных бэкапов:
-
-```bash
-docker compose -f docker-compose_cluster.yml --profile backup run --rm clickhouse-backup list local
-```
-
-Содержимое зеркала на репозитории:
+Содержимое архива на репозитории (тут лежат все снимки):
 
 ```bash
 sudo ls -la /mnt/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup/
+sudo du -sh /mnt/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup/*
+```
+
+На ноде после успешного запуска снимков быть **не должно** (или только неудачные):
+
+```bash
+docker compose -f docker-compose_cluster.yml --profile backup run --rm clickhouse-backup list local
 ```
 
 Лог последнего запуска:
@@ -201,18 +212,25 @@ tail -n 50 /var/log/ch_weekly_backup.log
 
 > Restore перезаписывает данные. Выполнять осознанно, желательно на тестовом узле.
 
-Список доступных бэкапов и восстановление конкретного:
+Снимки хранятся в `/mnt/backup`, а `clickhouse-backup restore` работает с **локальным**
+каталогом на ноде. Поэтому нужный снимок сначала возвращаем на ноду, затем восстанавливаем:
 
 ```bash
-docker compose -f docker-compose_cluster.yml --profile backup run --rm clickhouse-backup list local
+NAME=weekly_2026-05-24T20-59-59
+LOCAL=/mnt/2tb/DWH_cluster/ch_kafka_af_superset/data/clickhouse01/backup
+ARCHIVE=/mnt/backup/DWH_cluster/ch_kafka_af_superset/clickhouse_backup
 
+# 1. вернуть снимок из архива на ноду (с правами процесса clickhouse — UID из контейнера)
+CH_UID=$(docker exec clickhouse01 stat -c '%u' /var/lib/clickhouse)
+CH_GID=$(docker exec clickhouse01 stat -c '%g' /var/lib/clickhouse)
+sudo mkdir -p "$LOCAL/$NAME"
+sudo rsync -a --numeric-ids "$ARCHIVE/$NAME/" "$LOCAL/$NAME/"
+sudo chown -R "${CH_UID}:${CH_GID}" "$LOCAL/$NAME"
+
+# 2. восстановить
 docker compose -f docker-compose_cluster.yml --profile backup run --rm \
-  clickhouse-backup restore --rm weekly_2026-05-24T20-59-59
+  clickhouse-backup restore --rm "$NAME"
 ```
-
-Если бэкап есть только на `/mnt/backup`, сначала вернуть каталог снимка в локальный
-`.../data/clickhouse01/backup/` (тем же `rsync` в обратную сторону, с правами clickhouse),
-затем выполнить `restore`.
 
 ---
 
