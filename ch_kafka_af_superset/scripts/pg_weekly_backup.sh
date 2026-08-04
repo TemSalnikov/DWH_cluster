@@ -1,28 +1,30 @@
 #!/usr/bin/env bash
-# Еженедельный бэкап PostgreSQL (контейнер postgres из docker-compose_af.yml).
-# pg_dumpall снимает ВСЕ базы (airflow, superset, ...) + роли/пароли одним файлом.
-# Дамп пишется сразу в /mnt/backup (доступ только под sudo) в виде .sql.gz.
+# Еженедельный бэкап PostgreSQL с ноды ClickHouse.
+# Postgres крутится на другой ноде (docker-compose_af.yml, IP по умолчанию 192.168.14.225).
+# С этой ноды: временный контейнер с клиентом pg_dumpall -> TCP 5432 на удалённом хосте,
+# дамп сразу в /mnt/backup (доступ только под sudo) в виде .sql.gz.
 #
-# Для cron без пароля в /etc/sudoers.d/ch-backup-rsync (те же бинарники):
-#   userdwh ALL=(ALL) NOPASSWD: /usr/bin/tee, /bin/mkdir, /usr/bin/find
+# Для cron без пароля в /etc/sudoers.d/dwh-backup:
+#   userdwh ALL=(ALL) NOPASSWD: /usr/bin/tee, /usr/bin/mkdir, /usr/bin/find, /usr/bin/rm
 #
 # 45 2 * * 0 .../pg_weekly_backup.sh >> /var/log/pg_weekly_backup.log 2>&1
 
 set -euo pipefail
 
-PG_CONTAINER="${PG_CONTAINER:-postgres}"
+# Удалённый Postgres (нода Airflow / docker-compose_af.yml).
+PG_HOST="${PG_HOST:-192.168.14.225}"
+PG_PORT="${PG_PORT:-5432}"
 PG_USER="${PG_USER:-postgres}"
 PG_PASSWORD="${PG_PASSWORD:-postgres}"
+# Образ только как клиент pg_dumpall (на этой ноде контейнер postgres не нужен).
+PG_CLIENT_IMAGE="${PG_CLIENT_IMAGE:-postgres:16}"
 
-# Отдельный подкаталог: сюда пишутся только дампы postgres.
 BACKUP_ARCHIVE="${BACKUP_ARCHIVE:-/mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup}"
 BACKUPS_TO_KEEP="${BACKUPS_TO_KEEP:-5}"
-# auto | always | never — использовать ли sudo для доступа к приёмнику.
 BACKUP_SUDO="${BACKUP_SUDO:-auto}"
 
 DUMP_NAME="pg_all_$(date -u +%Y-%m-%dT%H-%M-%S).sql.gz"
 
-# Приёмник (/mnt/backup) пишем без sudo, только если каталог реально доступен на запись.
 can_write_archive() {
   local probe="$BACKUP_ARCHIVE"
   while [[ ! -e "$probe" && "$probe" == */* ]]; do
@@ -40,24 +42,25 @@ need_sudo() {
   esac
 }
 
-if ! docker ps --format '{{.Names}}' | grep -qx "$PG_CONTAINER"; then
-  echo "Ошибка: контейнер '$PG_CONTAINER' не запущен" >&2
+if need_sudo; then SUDO="sudo"; else SUDO=""; fi
+
+# Проверка доступности удалённого Postgres (клиент в одноразовом контейнере).
+if ! docker run --rm -e PGPASSWORD="$PG_PASSWORD" "$PG_CLIENT_IMAGE" \
+  pg_isready -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" >/dev/null 2>&1; then
+  echo "Ошибка: PostgreSQL недоступен на ${PG_HOST}:${PG_PORT} (пользователь ${PG_USER})" >&2
   exit 1
 fi
 
-if need_sudo; then SUDO="sudo"; else SUDO=""; fi
-
 $SUDO mkdir -p "$BACKUP_ARCHIVE"
 
-# pg_dumpall в stdout -> gzip -> файл в архиве. pipefail ловит ошибку дампа.
-docker exec -e PGPASSWORD="$PG_PASSWORD" "$PG_CONTAINER" \
-  pg_dumpall -U "$PG_USER" --clean --if-exists \
+# pg_dumpall по сети -> gzip -> /mnt/backup. pipefail ловит ошибку дампа.
+docker run --rm -e PGPASSWORD="$PG_PASSWORD" "$PG_CLIENT_IMAGE" \
+  pg_dumpall -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" --clean --if-exists \
   | gzip -c \
   | $SUDO tee "$BACKUP_ARCHIVE/$DUMP_NAME" > /dev/null
 
-echo "Готово: $BACKUP_ARCHIVE/$DUMP_NAME"
+echo "Готово: $BACKUP_ARCHIVE/$DUMP_NAME (источник ${PG_HOST}:${PG_PORT})"
 
-# Ротация: оставить BACKUPS_TO_KEEP последних файлов pg_all_*.sql.gz.
 mapfile -t OLD < <($SUDO find "$BACKUP_ARCHIVE" -maxdepth 1 -name 'pg_all_*.sql.gz' -printf '%T@ %p\n' \
   | sort -rn | tail -n +"$((BACKUPS_TO_KEEP + 1))" | cut -d' ' -f2-)
 

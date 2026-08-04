@@ -254,33 +254,52 @@ grep -E 'ERR|FTL|invalid cross-device|Operation not permitted' /var/log/ch_weekl
 
 ## 8. Бэкап PostgreSQL
 
-PostgreSQL работает в `docker-compose_af.yml` (контейнер `postgres`, суперюзер `postgres`,
-базы `airflow` и `superset`). Бэкап делается скриптом `scripts/pg_weekly_backup.sh` через
-`pg_dumpall` — **без изменения compose**, чтобы не задеть прод.
+PostgreSQL работает в `docker-compose_af.yml` на **другой ноде** (`192.168.14.225`,
+контейнер `postgres`, порт `5432` проброшен наружу). Скрипт `scripts/pg_weekly_backup.sh`
+запускается **с ноды ClickHouse**, где смонтирован `/mnt/backup`.
 
-- `pg_dumpall` снимает **все базы + роли/пароли** одним файлом (полное восстановление кластера).
+- Одноразовый контейнер `postgres:16` с клиентом `pg_dumpall` подключается по сети к
+  `192.168.14.225:5432` (локальный контейнер postgres на ноде CH не нужен).
 - Дамп сразу пишется в `/mnt/backup/.../postgres_backup/pg_all_<UTC>.sql.gz` (через `sudo`).
+- `pg_dumpall` снимает **все базы + роли/пароли** (`airflow`, `superset`, …).
 - Ротация: хранится `BACKUPS_TO_KEEP` последних файлов (по умолчанию 5).
+- Compose на ноде Postgres **не меняется**.
+
+Перед первым запуском с ноды CH:
+
+```bash
+# доступность порта
+nc -vz 192.168.14.225 5432
+# или
+docker run --rm -e PGPASSWORD=postgres postgres:16 \
+  pg_isready -h 192.168.14.225 -p 5432 -U postgres
+```
+
+Если `pg_isready` / `pg_dumpall` получают отказ в аутентификации — на ноде Postgres в
+`pg_hba.conf` должно быть разрешено подключение с IP ноды ClickHouse (или из подсети) для
+пользователя `postgres` по паролю (`md5`/`scram-sha-256`).
 
 ### Переменные скрипта
 
 | Переменная | По умолчанию | Назначение |
 |------------|--------------|------------|
-| `PG_CONTAINER` | `postgres` | имя контейнера |
+| `PG_HOST` | `192.168.14.225` | нода с Postgres |
+| `PG_PORT` | `5432` | порт (проброс из compose) |
 | `PG_USER` | `postgres` | суперпользователь |
 | `PG_PASSWORD` | `postgres` | пароль (`PGPASSWORD`) |
+| `PG_CLIENT_IMAGE` | `postgres:16` | образ клиента `pg_dumpall` |
 | `BACKUP_ARCHIVE` | `/mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup` | каталог дампов |
 | `BACKUPS_TO_KEEP` | `5` | сколько дампов хранить |
 | `BACKUP_SUDO` | `auto` | `auto` / `always` / `never` |
 
-### Ручной запуск
+### Ручной запуск (с ноды ClickHouse)
 
 ```bash
 cd /home/userdwh/DWH_cluster/ch_kafka_af_superset
 ./scripts/pg_weekly_backup.sh
 ```
 
-### Расписание (cron)
+### Расписание (cron на ноде ClickHouse)
 
 Через 15 минут после ClickHouse, воскресенье 02:45:
 
@@ -288,23 +307,22 @@ cd /home/userdwh/DWH_cluster/ch_kafka_af_superset
 45 2 * * 0 /home/userdwh/DWH_cluster/ch_kafka_af_superset/scripts/pg_weekly_backup.sh >> /var/log/pg_weekly_backup.log 2>&1
 ```
 
-Для cron без пароля добавить в `/etc/sudoers.d/ch-backup-rsync` бинарники (уточнить пути
-через `command -v tee mkdir find`):
+Для cron без пароля в `/etc/sudoers.d/dwh-backup` (пути уточнить через `command -v`):
 
 ```text
-userdwh ALL=(ALL) NOPASSWD: /usr/bin/tee, /bin/mkdir, /usr/bin/find, /bin/rm
+userdwh ALL=(ALL) NOPASSWD: /usr/bin/tee, /usr/bin/mkdir, /usr/bin/find, /usr/bin/rm, /usr/bin/rsync
 ```
 
 ### Проверка и восстановление
 
 ```bash
-# список дампов
+# список дампов (на ноде CH, где /mnt/backup)
 sudo ls -la /mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup/
 
-# восстановление ВСЕГО кластера (перезапишет роли и базы!)
-gunzip -c /mnt/backup/.../postgres_backup/pg_all_2026-05-24T20-59-59.sql.gz \
-  | docker exec -i -e PGPASSWORD=postgres postgres psql -U postgres -d postgres
+# восстановление на удалённый Postgres (перезапишет роли и базы!)
+gunzip -c /mnt/backup/DWH_cluster/ch_kafka_af_superset/postgres_backup/pg_all_2026-05-24T20-59-59.sql.gz \
+  | docker run --rm -i -e PGPASSWORD=postgres postgres:16 \
+      psql -h 192.168.14.225 -p 5432 -U postgres -d postgres
 ```
 
-> `pg_dumpall` с `--clean --if-exists` в дампе уже содержит `DROP` перед `CREATE`,
-> поэтому restore идемпотентен. Проверяйте восстановление на тестовом окружении.
+> В дампе есть `DROP`/`CREATE` (`--clean --if-exists`). Проверяйте restore на тесте.
