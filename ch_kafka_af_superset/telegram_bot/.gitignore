@@ -1,0 +1,5 @@
+.env
+data/notified_failures.json
+__pycache__/
+*.pyc
+.venv/

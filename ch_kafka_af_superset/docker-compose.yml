@@ -787,3 +787,41 @@ services:
     networks:
       click_network: {}
 
+  airflow-telegram-backend:
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile.backend
+    hostname: airflow-telegram-backend
+    container_name: airflow-telegram-backend
+    restart: always
+    environment:
+      AIRFLOW_API_URL: ${AIRFLOW_API_URL:-http://airflow-webserver:8080/api/v1}
+      AIRFLOW_USERNAME: ${AIRFLOW_USERNAME:-airflow}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD:-airflow}
+      TIMEZONE: ${TIMEZONE:-Europe/Moscow}
+    depends_on:
+      airflow-webserver:
+        condition: service_healthy
+    networks:
+      click_network: {}
+
+  airflow-telegram-bot:
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile.bot
+    hostname: airflow-telegram-bot
+    container_name: airflow-telegram-bot
+    restart: always
+    env_file:
+      - ./telegram_bot/.env
+    environment:
+      BACKEND_URL: http://airflow-telegram-backend:8000
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      STATE_FILE: /data/notified_failures.json
+    volumes:
+      - ./telegram_bot/data:/data
+    depends_on:
+      - airflow-telegram-backend
+    networks:
+      click_network: {}
+
