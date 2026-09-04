@@ -1,3 +1,3 @@
-# Local state for already notified DAG failures
+# Local state for already notified DAG failures and Telethon session
 *
 !.gitignore

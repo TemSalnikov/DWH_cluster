@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telethon import Button, TelegramClient, events
+from telethon.network.connection.tcpmtproxy import ConnectionTcpMTProxyRandomizedIntermediate
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -26,6 +26,15 @@ TELEGRAM_CHAT_IDS = {
 }
 POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "60"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "/data/notified_failures.json"))
+SESSION_PATH = os.getenv("TELEGRAM_SESSION_PATH", "/data/bot_session")
+
+# Official Telegram Desktop client credentials (public).
+TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID", "2040"))
+TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "b18441a1ff607e10a989891a5462e627")
+
+TELEGRAM_PROXY_HOST = os.getenv("TELEGRAM_PROXY_HOST", "").strip()
+TELEGRAM_PROXY_PORT = int(os.getenv("TELEGRAM_PROXY_PORT", "0") or "0")
+TELEGRAM_PROXY_SECRET = os.getenv("TELEGRAM_PROXY_SECRET", "").strip()
 
 BTN_SUCCESS_TODAY = "✅ Выполненные сегодня"
 BTN_SKIPPED_TODAY = "⏭ Скипнутые сегодня"
@@ -33,26 +42,17 @@ BTN_FAILED_MONTH = "❌ Упавшие за месяц"
 BTN_FAILED_PREV_MONTH = "📅 Упавшие за прошлый месяц"
 BTN_MENU = "📋 Меню"
 
-
-def menu_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton(BTN_SUCCESS_TODAY), KeyboardButton(BTN_SKIPPED_TODAY)],
-            [KeyboardButton(BTN_FAILED_MONTH), KeyboardButton(BTN_FAILED_PREV_MONTH)],
-            [KeyboardButton(BTN_MENU)],
-        ],
-        resize_keyboard=True,
-    )
+MENU_BUTTONS = [
+    [Button.text(BTN_SUCCESS_TODAY), Button.text(BTN_SKIPPED_TODAY)],
+    [Button.text(BTN_FAILED_MONTH), Button.text(BTN_FAILED_PREV_MONTH)],
+    [Button.text(BTN_MENU)],
+]
 
 
-def is_allowed(update: Update) -> bool:
+def is_allowed(event: events.NewMessage.Event) -> bool:
     if not TELEGRAM_CHAT_IDS:
         return True
-    chat = update.effective_chat
-    user = update.effective_user
-    chat_id = chat.id if chat else None
-    user_id = user.id if user else None
-    return chat_id in TELEGRAM_CHAT_IDS or user_id in TELEGRAM_CHAT_IDS
+    return event.chat_id in TELEGRAM_CHAT_IDS or event.sender_id in TELEGRAM_CHAT_IDS
 
 
 async def backend_get(path: str) -> dict[str, Any]:
@@ -156,56 +156,26 @@ def chunk_text(text: str, limit: int = 4000) -> list[str]:
     return chunks
 
 
-async def reply_long(update: Update, text: str) -> None:
-    for chunk in chunk_text(text):
-        await update.message.reply_text(chunk, reply_markup=menu_keyboard())
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not is_allowed(update):
-        return
-    await update.message.reply_text(
-        "Мониторинг Airflow DAG.\nВыберите пункт меню:",
-        reply_markup=menu_keyboard(),
-    )
-
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.message or not is_allowed(update):
-        return
-
-    text = (update.message.text or "").strip()
-    mapping = {
-        BTN_SUCCESS_TODAY: ("/runs/success/today", "✅ Выполненные сегодня"),
-        BTN_SKIPPED_TODAY: ("/runs/skipped/today", "⏭ Скипнутые сегодня"),
-        BTN_FAILED_MONTH: ("/runs/failed/current-month", "❌ Упавшие за текущий месяц"),
-        BTN_FAILED_PREV_MONTH: ("/runs/failed/previous-month", "📅 Упавшие за прошлый месяц"),
+def build_client() -> TelegramClient:
+    kwargs: dict[str, Any] = {
+        "session": SESSION_PATH,
+        "api_id": TELEGRAM_API_ID,
+        "api_hash": TELEGRAM_API_HASH,
     }
-
-    if text in (BTN_MENU, "/menu"):
-        await update.message.reply_text("Меню:", reply_markup=menu_keyboard())
-        return
-
-    if text not in mapping:
-        await update.message.reply_text(
-            "Используйте кнопки меню.",
-            reply_markup=menu_keyboard(),
+    if TELEGRAM_PROXY_HOST and TELEGRAM_PROXY_PORT and TELEGRAM_PROXY_SECRET:
+        logger.info(
+            "Using MTProto proxy %s:%s",
+            TELEGRAM_PROXY_HOST,
+            TELEGRAM_PROXY_PORT,
         )
-        return
-
-    path, title = mapping[text]
-    try:
-        payload = await backend_get(path)
-        await reply_long(update, format_list(title, payload))
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Backend request failed")
-        await update.message.reply_text(
-            f"Ошибка запроса к backend: {exc}",
-            reply_markup=menu_keyboard(),
-        )
+        kwargs["connection"] = ConnectionTcpMTProxyRandomizedIntermediate
+        kwargs["proxy"] = (TELEGRAM_PROXY_HOST, TELEGRAM_PROXY_PORT, TELEGRAM_PROXY_SECRET)
+    else:
+        logger.warning("MTProto proxy is not configured")
+    return TelegramClient(**kwargs)
 
 
-async def poll_failures(app: Application) -> None:
+async def poll_failures(client: TelegramClient) -> None:
     notified = load_notified()
     logger.info("Failure poller started, interval=%ss", POLL_INTERVAL_SECONDS)
     while True:
@@ -220,7 +190,7 @@ async def poll_failures(app: Application) -> None:
                     logger.warning("TELEGRAM_CHAT_IDS is empty, skip alert send")
                     continue
                 for chat_id in targets:
-                    await app.bot.send_message(chat_id=chat_id, text=message)
+                    await client.send_message(chat_id, message)
                 notified.add(failure_key(item))
             if new_items:
                 save_notified(notified)
@@ -229,25 +199,62 @@ async def poll_failures(app: Application) -> None:
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
-async def post_init(app: Application) -> None:
-    app.create_task(poll_failures(app))
-
-
-def main() -> None:
+async def main() -> None:
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
 
-    application = (
-        Application.builder()
-        .token(TELEGRAM_BOT_TOKEN)
-        .post_init(post_init)
-        .build()
-    )
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("menu", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    Path(SESSION_PATH).parent.mkdir(parents=True, exist_ok=True)
+    client = build_client()
+
+    @client.on(events.NewMessage(pattern=r"^/(start|menu)$"))
+    async def start_handler(event: events.NewMessage.Event) -> None:
+        if not is_allowed(event):
+            return
+        await event.respond(
+            "Мониторинг Airflow DAG.\nВыберите пункт меню:",
+            buttons=MENU_BUTTONS,
+        )
+
+    @client.on(events.NewMessage)
+    async def text_handler(event: events.NewMessage.Event) -> None:
+        if not event.message.message or not is_allowed(event):
+            return
+        text = event.message.message.strip()
+        if text.startswith("/"):
+            return
+
+        mapping = {
+            BTN_SUCCESS_TODAY: ("/runs/success/today", "✅ Выполненные сегодня"),
+            BTN_SKIPPED_TODAY: ("/runs/skipped/today", "⏭ Скипнутые сегодня"),
+            BTN_FAILED_MONTH: ("/runs/failed/current-month", "❌ Упавшие за текущий месяц"),
+            BTN_FAILED_PREV_MONTH: ("/runs/failed/previous-month", "📅 Упавшие за прошлый месяц"),
+        }
+
+        if text == BTN_MENU:
+            await event.respond("Меню:", buttons=MENU_BUTTONS)
+            return
+
+        if text not in mapping:
+            await event.respond("Используйте кнопки меню.", buttons=MENU_BUTTONS)
+            return
+
+        path, title = mapping[text]
+        try:
+            payload = await backend_get(path)
+            for chunk in chunk_text(format_list(title, payload)):
+                await event.respond(chunk, buttons=MENU_BUTTONS)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Backend request failed")
+            await event.respond(
+                f"Ошибка запроса к backend: {exc}",
+                buttons=MENU_BUTTONS,
+            )
+
+    await client.start(bot_token=TELEGRAM_BOT_TOKEN)
+    logger.info("Telegram bot started")
+    asyncio.create_task(poll_failures(client))
+    await client.run_until_disconnected()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
