@@ -402,6 +402,8 @@ services:
     hostname: airflow-telegram-backend
     container_name: airflow-telegram-backend
     restart: always
+    env_file:
+      - ./telegram_bot/.env
     environment:
       AIRFLOW_API_URL: ${AIRFLOW_API_URL:-http://airflow-webserver:8080/api/v1}
       AIRFLOW_USERNAME: ${AIRFLOW_USERNAME:-airflow}
