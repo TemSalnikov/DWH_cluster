@@ -37,15 +37,16 @@ TELEGRAM_PROXY_PORT = int(os.getenv("TELEGRAM_PROXY_PORT", "0") or "0")
 TELEGRAM_PROXY_SECRET = os.getenv("TELEGRAM_PROXY_SECRET", "").strip()
 
 BTN_SUCCESS_TODAY = "✅ Выполненные сегодня"
-BTN_SKIPPED_TODAY = "⏭ Скипнутые сегодня"
-BTN_FAILED_MONTH = "❌ Упавшие за месяц"
-BTN_FAILED_PREV_MONTH = "📅 Упавшие за прошлый месяц"
-BTN_MENU = "📋 Меню"
+BTN_SKIPPED_TODAY = "⏭️ Скипнутые сегодня"
+BTN_FAILED_MONTH = "❌ Упавшие за текущий месяц"
+BTN_FAILED_PREV_MONTH = "❌ Упавшие за прошлый месяц"
+# BTN_MENU = "📋 Меню"
 
 MENU_BUTTONS = [
-    [Button.text(BTN_SUCCESS_TODAY), Button.text(BTN_SKIPPED_TODAY)],
-    [Button.text(BTN_FAILED_MONTH), Button.text(BTN_FAILED_PREV_MONTH)],
-    [Button.text(BTN_MENU)],
+    [Button.text(BTN_SUCCESS_TODAY)],
+    [Button.text(BTN_SKIPPED_TODAY)],
+    [Button.text(BTN_FAILED_MONTH)],
+    [Button.text(BTN_FAILED_PREV_MONTH)],
 ]
 
 
@@ -225,14 +226,14 @@ async def main() -> None:
 
         mapping = {
             BTN_SUCCESS_TODAY: ("/runs/success/today", "✅ Выполненные сегодня"),
-            BTN_SKIPPED_TODAY: ("/runs/skipped/today", "⏭ Скипнутые сегодня"),
+            BTN_SKIPPED_TODAY: ("/runs/skipped/today", "⏭️ Скипнутые сегодня"),
             BTN_FAILED_MONTH: ("/runs/failed/current-month", "❌ Упавшие за текущий месяц"),
-            BTN_FAILED_PREV_MONTH: ("/runs/failed/previous-month", "📅 Упавшие за прошлый месяц"),
+            BTN_FAILED_PREV_MONTH: ("/runs/failed/previous-month", "❌ Упавшие за прошлый месяц"),
         }
 
-        if text == BTN_MENU:
-            await event.respond("Меню:", buttons=MENU_BUTTONS)
-            return
+        # if text == BTN_MENU:
+        #     await event.respond("Меню:", buttons=MENU_BUTTONS)
+        #     return
 
         if text not in mapping:
             await event.respond("Используйте кнопки меню.", buttons=MENU_BUTTONS)
