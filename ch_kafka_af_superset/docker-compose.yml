@@ -847,7 +847,7 @@ services:
       EXPORT_DIR: /data/exports
       DRY_RUN: ${DRY_RUN:-false}
     volumes:
-      - ./export_service/manifests:/app/manifests:ro
+      - ./export_service/manifests:/app/manifests
       - ./export_service/data/exports:/data/exports
     depends_on:
       - clickhouse01

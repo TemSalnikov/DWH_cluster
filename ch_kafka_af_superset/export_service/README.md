@@ -1,396 +1,323 @@
-# Export Service
+# Export Service — как пользоваться
 
-Отдельный сервис полной выгрузки данных дашбордов Apache Superset **без лимита 100 000 строк**.
+Сервис выгружает данные дашбордов Superset в CSV **без лимита 100 000 строк**.
 
-- **Данные** читаются напрямую из ClickHouse (стрим в CSV / ZIP).
-- **Superset** используется только как источник метаданных (дашборды, чарты, фильтры) при подключении новых выгрузок.
-- Связь «дашборд → таблица → фильтры → профили выгрузки» описывается YAML-манифестами — без правок Python на каждый дашборд.
+Данные берутся из ClickHouse. В Superset вы только смотрите, какие фильтры и чарты нужны — сами файлы качаются через этот сервис (Swagger или bash).
 
-Пример: дашборд **«Выбытия АС»** (`manifests/vybytiya_as.yaml`, Superset `dashboard_id=16`, таблица `bdm.disposal_all_stats_2_ac`).
+Уже подключен пример: дашборд **«Выбытия АС»**.
 
----
+| Что | Значение |
+|-----|----------|
+| Адрес сервиса | http://localhost:8099 |
+| **Пользовательский интерфейс** | **http://localhost:8099/** |
+| Swagger (для админов) | http://localhost:8099/docs |
+| Id в сервисе | `vybytiya_as` |
+| Дашборд в Superset | http://192.168.14.226:8088 → «Выбытия АС» |
 
-## Содержание
+## Как выгрузить за 1 минуту (для любого пользователя)
 
-1. [Архитектура и взаимодействие с Superset](#1-архитектура-и-взаимодействие-с-superset)
-2. [Интерфейс системы (API)](#2-интерфейс-системы-api)
-3. [Добавление выгрузок и перенос фильтров из Superset](#3-добавление-выгрузок-и-перенос-фильтров-из-superset)
-4. [Инструкция по запуску (Docker)](#4-инструкция-по-запуску-docker)
-5. [Локальный запуск без Docker](#5-локальный-запуск-без-docker)
-6. [Структура каталога](#6-структура-каталога)
+1. Откройте http://localhost:8099/
+2. Нажмите на отчёт (например «Выбытия АС»)
+3. При необходимости поправьте период и фильтры → **Далее**
+4. Выберите «Все строки» или нужную сводку → **Далее: показать данные**
+5. Проверьте таблицу-образец → нажмите **Скачать полный файл**
 
----
-
-## 1. Архитектура и взаимодействие с Superset
-
-### Роли компонентов
-
-| Компонент | Роль |
-|-----------|------|
-| **Superset** | Витрина аналитики. Хранит дашборды, чарты, native/adhoc-фильтры, SQL-выражения метрик. **Не** используется для массовой выгрузки строк. |
-| **Export Service** | UI/API выгрузки: принимает выбранный дашборд + значения фильтров, строит SQL по манифесту, стримит результат из ClickHouse. |
-| **ClickHouse** | Источник данных (`bdm.*` и др.). Выгрузки идут read-only запросами. |
-| **Манифесты YAML** | Контракт между дашбордом Superset и сервисом: таблица, фильтры, профили export. |
-
-### Схема потоков
-
-```
-┌──────────────────┐  metadata only (login, charts, sync)
-│ Apache Superset  │◄─────────────────────────────────────┐
-│  dashboards/     │                                      │
-│  charts/filters  │                                      │
-└────────┬─────────┘                                      │
-         │ пользователь смотрит дашборд                   │
-         │ (как раньше)                                   │
-         ▼                                                │
-┌──────────────────┐     POST /exports                    │
-│  Клиент / UI     │─────────────────────────────────────►│
-│  (curl, Swagger, │◄── CSV / ZIP / status ───────────────┤
-│   будущий фронт) │                                      │
-└──────────────────┘                                      │
-                                                          │
-                              ┌───────────────────────────┴────────────┐
-                              │           Export Service               │
-                              │  ManifestRegistry  FilterCompiler      │
-                              │  ExportWorker (jobs)  Superset sync    │
-                              └───────────────┬────────────────────────┘
-                                              │ SELECT … FORMAT/CSV stream
-                                              ▼
-                                      ┌───────────────┐
-                                      │  ClickHouse   │
-                                      │  bdm.*        │
-                                      └───────────────┘
-```
-
-### Когда сервис ходит в Superset
-
-| Сценарий | Ходит в Superset? | Ходит в ClickHouse? |
-|----------|-------------------|---------------------|
-| `GET /dashboards`, выгрузка по манифесту | Нет | Да (если не `DRY_RUN`) |
-| `python scripts/sync_dashboard.py` | Да (чтение чартов) | Нет |
-| Список значений фильтра (`values_from.distinct`) | Нет | Да (`SELECT DISTINCT`) |
-
-Итого в рантайме выгрузки Superset **не участвует** — только ClickHouse + локальный YAML. Это снимает лимит `SQL_MAX_ROW=100000` и не нагружает gunicorn Superset тяжёлыми CSV.
-
-### Учётные данные
-
-В `.env`:
-
-- `SUPERSET_URL` / `SUPERSET_USERNAME` / `SUPERSET_PASSWORD` — только для **sync** манифестов.
-- `CLICKHOUSE_*` — для выгрузок и distinct-значений фильтров.
-
-Рекомендуется отдельный read-only пользователь ClickHouse с лимитами `max_execution_time` / `max_result_bytes`.
+Инструкция ниже — для запуска сервиса и подключения новых отчётов администратором.
 
 ---
 
-## 2. Интерфейс системы (API)
-
-Сервис — FastAPI. После запуска:
-
-- API: `http://<host>:8099`
-- Swagger UI: `http://<host>:8099/docs`
-- OpenAPI JSON: `http://<host>:8099/openapi.json`
-
-Отдельного веб-UI пока нет: взаимодействие через Swagger / `curl` / будущий фронтенд.
-
-### Эндпоинты
-
-| Method | Path | Описание |
-|--------|------|----------|
-| `GET` | `/health` | Liveness (`status`, флаг `dry_run`) |
-| `GET` | `/dashboards` | Список подключённых дашбордов (из YAML) |
-| `GET` | `/dashboards/{id}` | Полный манифест |
-| `GET` | `/dashboards/{id}/filters` | Описание фильтров + `values` (distinct из CH) |
-| `POST` | `/exports/preview-sql` | Собрать SQL **без** выполнения |
-| `POST` | `/exports` | Создать выгрузку (синхронный job) |
-| `GET` | `/exports/{job_id}` | Статус job |
-| `GET` | `/exports/{job_id}/download` | Скачать CSV или ZIP |
-
-`{id}` — это **id манифеста** (например `vybytiya_as`), не числовой id Superset.
-
-### Типовой сценарий выгрузки
+# Часть 1. Запуск сервиса (один раз)
 
 ```bash
-# 1. Какие дашборды подключены
+cd /path/to/ch_kafka_af_superset
+
+cp export_service/.env.example export_service/.env
+# при необходимости поправьте SUPERSET_URL и CLICKHOUSE_* в .env
+
+docker compose -f export_service/docker-compose.yml up -d --build
+```
+
+Проверка:
+
+```bash
+curl http://localhost:8099/health
+# ожидаете: {"status":"ok","dry_run":"false"}
+```
+
+Откройте в браузере: http://localhost:8099/docs
+
+---
+
+# Часть 2. Выгрузить данные — пример «Выбытия АС»
+
+Ниже один и тот же сценарий тремя способами. Сначала разберитесь «что выбираем», потом повторите в Swagger или bash.
+
+## 2.1. Что сделать в Superset (только чтобы понять фильтры)
+
+1. Откройте дашборд **«Выбытия АС»**.
+2. Посмотрите, какими фильтрами вы обычно ограничиваете данные, например:
+   - период дат;
+   - аптечная сеть;
+   - регион;
+   - тип выбытия.
+3. Запомните значения, которые хотите выгрузить  
+   (например период `2026-01-01` … `2026-03-31`, сеть `АСНА ПАС`).
+
+**В самом дашборде ничего нажимать для выгрузки не нужно.**  
+Кнопка CSV в Superset как раз ограничена 100k строк — её мы не используем.
+
+В сервисе те же фильтры задаются в запросе (см. ниже).
+
+## 2.2. Что выбрать в сервисе
+
+| Параметр | Пример | Откуда взять |
+|----------|--------|--------------|
+| Дашборд | `vybytiya_as` | `GET /dashboards` |
+| Тип выгрузки | `raw` = все строки таблицы; `top_points` = как чарт «Топ точек продаж»; `bundle_tables` = ZIP нескольких выгрузок | блок `exports` в ответе `/dashboards` |
+| Фильтры | дата, owner, region… | `GET /dashboards/vybytiya_as/filters` |
+
+## 2.3. Выгрузка через Swagger (самый простой путь)
+
+1. Откройте http://localhost:8099/docs
+2. Раскройте **`GET /dashboards`** → **Try it out** → **Execute**  
+   Убедитесь, что в списке есть `vybytiya_as`.
+3. (Опционально) **`GET /dashboards/{dashboard_id}/filters`**  
+   - `dashboard_id` = `vybytiya_as`  
+   - Execute — увидите доступные фильтры и списки значений.
+4. Раскройте **`POST /exports`** → **Try it out**.  
+   Вставьте тело:
+
+```json
+{
+  "dashboard_id": "vybytiya_as",
+  "export_id": "raw",
+  "filters": {
+    "date": { "from": "2026-01-01", "to": "2026-03-31" },
+    "owner": ["АСНА ПАС"]
+  }
+}
+```
+
+5. **Execute**. В ответе будет примерно:
+
+```json
+{
+  "job_id": "a1b2c3d4e5f6",
+  "status": "done",
+  "file_name": "vybytiya_as_raw_20260912T120000Z.csv",
+  ...
+}
+```
+
+6. Скопируйте `job_id`.
+7. Раскройте **`GET /exports/{job_id}/download`** → вставьте `job_id` → **Execute** → скачайте файл.
+
+Другие варианты `export_id` для этого дашборда:
+
+| export_id | Что получите |
+|-----------|----------------|
+| `raw` | Все строки `bdm.disposal_all_stats_2_ac` с фильтрами |
+| `top_points` | Агрегат как чарт «Топ точек продаж» |
+| `top_products` | Топ продуктов |
+| `top_regions` | Топ регионов |
+| `pivot_svod` | Свод по дате и продукту |
+| `bundle_tables` | ZIP со всеми перечисленными CSV |
+
+Перед реальной выгрузкой можно проверить SQL без скачивания файла:  
+**`POST /exports/preview-sql`** — то же тело, что у `/exports`.
+
+## 2.4. Выгрузка через bash
+
+```bash
+# 1) список дашбордов
 curl -s http://localhost:8099/dashboards | python3 -m json.tool
 
-# 2. Какие фильтры и какие значения доступны
-curl -s http://localhost:8099/dashboards/vybytiya_as/filters | python3 -m json.tool
-
-# 3. Превью SQL
-curl -s -X POST http://localhost:8099/exports/preview-sql \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "dashboard_id": "vybytiya_as",
-    "export_id": "top_points",
-    "filters": {
-      "date": {"from": "2026-01-01", "to": "2026-03-31"},
-      "owner": ["АСНА ПАС"]
-    }
-  }' | python3 -m json.tool
-
-# 4. Запуск выгрузки
+# 2) создать выгрузку
 curl -s -X POST http://localhost:8099/exports \
   -H 'Content-Type: application/json' \
   -d '{
     "dashboard_id": "vybytiya_as",
     "export_id": "raw",
     "filters": {
-      "date": "relative:current_year",
+      "date": {"from": "2026-01-01", "to": "2026-03-31"},
       "owner": ["АСНА ПАС"]
     }
-  }' | python3 -m json.tool
-# → {"job_id":"...", "status":"done", "file_name":"vybytiya_as_raw_....csv", ...}
+  }' | tee /tmp/export_job.json | python3 -m json.tool
 
-# 5. Скачать файл
-curl -OJ http://localhost:8099/exports/<job_id>/download
+# 3) достать job_id и скачать файл
+JOB=$(python3 -c "import json; print(json.load(open('/tmp/export_job.json'))['job_id'])")
+curl -OJ "http://localhost:8099/exports/${JOB}/download"
+# файл появится в текущей папке
 ```
 
-### Формат `filters` в запросе
+Файл также лежит на сервере:
 
-Ключи = `id` фильтров из манифеста:
+`export_service/data/exports/`
 
-| Тип фильтра в YAML | Значение в JSON |
-|--------------------|-----------------|
-| `date_range` | `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}` или `"relative:current_year"` / `current_month` / `last_30d` |
-| `multi_select` | массив строк: `["Значение1", "Значение2"]` |
-| `text` | одна строка |
+## 2.5. Как писать фильтры
 
-Непереданные необязательные фильтры пропускаются (или берётся `default` из манифеста). Неизвестные ключи → `400`.
+Имена фильтров берутся из манифеста (`id`), не из подписей в Superset.
 
-### Профили выгрузки (`exports`)
+Для `vybytiya_as`:
 
-| `mode` | Результат |
-|--------|-----------|
-| `raw` | `SELECT` всех (или указанных) колонок таблицы с WHERE |
-| `aggregate` | `GROUP BY` + метрики (аналог table/pivot чарта) |
-| `bundle` | ZIP из нескольких профилей (`include: [...]`) |
+```json
+{
+  "date": { "from": "2026-01-01", "to": "2026-03-31" },
+  "owner": ["АСНА ПАС", "Ригла"],
+  "region": ["Москва"],
+  "disposal_type": ["Розничная продажа"],
+  "product": ["Название продукта"]
+}
+```
 
-Файлы сохраняются в `export_service/data/exports/` (том Docker → `/data/exports`).
+Можно указать только нужные поля. Пустой объект `"filters": {}` — выгрузка с дефолтами из манифеста (для даты по умолчанию — текущий год).
+
+Короткая запись периода:
+
+```json
+"date": "relative:current_year"
+```
 
 ---
 
-## 3. Добавление выгрузок и перенос фильтров из Superset
+# Часть 3. Добавить новый дашборд (пример)
 
-Цель: новый дашборд за **минуты**, без изменения кода сервиса.
+Допустим, нужно подключить дашборд **«Закупки АС»**.
 
-### 3.1. Автогенерация draft-манифеста
+## Шаг 1. Узнать id дашборда в Superset
+
+1. Откройте дашборд в браузере.
+2. В адресе будет что-то вроде `/superset/dashboard/20/` → id = **20**.  
+   Либо смотрите список дашбордов в UI.
+
+## Шаг 2. Сгенерировать черновик манифеста
 
 ```bash
-# из контейнера
 docker exec -it export-service \
-  python scripts/sync_dashboard.py --dashboard-id 16 --out manifests/vybytiya_as.yaml
-
-# или локально (нужен доступ к SUPERSET_URL)
-cd export_service
-python scripts/sync_dashboard.py --dashboard-id 20 --out manifests/zakupki_as.yaml
+  python scripts/sync_dashboard.py --dashboard-id 20 --out manifests/zakupki_as.yaml
 ```
 
-Что делает `sync`:
+На хосте появится файл:
 
-1. Логин в Superset API (`/api/v1/security/login`).
-2. Обход `/api/v1/chart/` и отбор чартов, у которых в `dashboards` есть нужный `dashboard_id`  
-   (прямой `GET /api/v1/dashboard/{id}` у JWT часто отдаёт 404 — поэтому связь идёт через чарты).
-3. Определение основной таблицы (`datasource_name_text`, напр. `bdm.disposal_all_stats_2_ac`).
-4. Эвристика `defaults.where` из adhoc-фильтров, общих для большинства чартов  
-   (для «Выбытия АС»: `type_of_disposal NOT IN ('Остаток')`).
-5. Черновик UI-фильтров из частых `groupby` / временных колонок.
-6. Профили `exports` для чартов `table` / `pivot_table_v2` + `raw` + `bundle`.
+`export_service/manifests/zakupki_as.yaml`
 
-### 3.2. Ручная доводка манифеста (обязательно)
+Перезапускать контейнер **не нужно** — сервис читает YAML при каждом запросе.
 
-Откройте YAML и проверьте:
+## Шаг 3. Поправить манифест вручную
 
-1. **`id` / `title`** — человекочитаемые.
-2. **`source.table`** — схема.таблица ClickHouse.
-3. **`defaults.where`** — «вшитые» условия дашборда (эквивалент постоянных adhoc-фильтров чартов).
-4. **`filters`** — только те измерения, которыми пользователь крутит дашборд в Superset (дата, АС, регион, продукт…).
-5. **`exports[].metrics[].expr`** — после sync могут быть `sum(\`TODO_...\`)`; подставьте реальные выражения из чарта (в Explore → View query или через `POST /api/v1/chart/data` с `result_type=query`).
-6. **`bundle.include`** — список профилей в ZIP.
+Откройте YAML и проверьте минимум:
 
-Манифесты монтируются в контейнер **read-only**; после сохранения файла на хосте `GET /dashboards` подхватывает изменения без ребилда (registry читает YAML на запрос).
+1. `id:` — латиницей, без пробелов (например `zakupki_as`) — это то, что потом пишете в `dashboard_id` в Swagger.
+2. `source.table:` — правильная таблица ClickHouse (например `bdm.ac_movement`).
+3. `filters:` — какие фильтры нужны пользователю (дата, сети…).  
+   Сверяйте с фильтрами на дашборде в Superset: колонка в CH = `column:` в YAML.
+4. `exports:` — что можно скачивать:
+   - оставьте `raw` (все строки);
+   - для нужных табличных чартов поправьте `metrics` (после sync там часто бывает `TODO` — замените на реальный SQL из Explore → **View query**);
+   - в `bundle_tables.include` перечислите id выгрузок для ZIP.
 
-### 3.3. Как переносить параметры фильтрации из Superset
+Кусок «как в Superset → как в YAML»:
 
-В Superset фильтры живут в двух местах — оба нужно учесть в манифесте.
+| В дашборде Superset | В манифесте |
+|---------------------|-------------|
+| Фильтр «Период» по колонке `date_of_disposal` | `filters` → `id: date`, `column: date_of_disposal`, `type: date_range` |
+| Фильтр «Аптечная сеть» по `owner` | `filters` → `id: owner`, `type: multi_select` |
+| На всех чартах стоит «тип ≠ Остаток» | `defaults.where` |
+| Чарт «Топ точек» (таблица) | `exports` с `mode: aggregate`, `group_by`, `metrics` |
 
-#### A. Native filters дашборда
+Ориентир — готовый файл `manifests/vybytiya_as.yaml`.
 
-В UI: Dashboard → фильтры сверху (период, АС, регион…).
+## Шаг 4. Проверить, что дашборд появился
 
-В API (если доступен `GET /api/v1/dashboard/{id}`):  
-`json_metadata.native_filter_configuration[]` → поля `name`, `targets[].column.name`, `filterType`.
-
-В манифест это ложится так:
-
-```yaml
-filters:
-  - id: date                    # стабильный ключ для API
-    label: "Период"             # как в Superset
-    column: date_of_disposal    # targets.column.name
-    type: date_range
-    default: "relative:current_year"
-```
-
-#### B. Adhoc-фильтры чартов
-
-В Explore у чарта: `adhoc_filters` (например `type_of_disposal NOT IN ['Остаток']`).
-
-- Если фильтр **общий для дашборда** и пользователь его не снимает → `defaults.where`.
-- Если фильтр **выбираемый** → элемент `filters` с `type: multi_select` / `date_range`.
-
-Пример переноса для «Выбытия АС»:
-
-| В Superset | В манифесте |
-|------------|-------------|
-| Native / time: `date_of_disposal` | `filters.id: date`, `type: date_range` |
-| Частый groupby / native: `owner` | `filters.id: owner`, `values_from.distinct: owner` |
-| Adhoc на почти всех чартах: `type_of_disposal NOT IN ('Остаток')` | `defaults.where` |
-| Table «Топ точек продаж»: groupby + SUM | `exports.id: top_points`, `mode: aggregate` |
-
-#### C. Соответствие значений UI → SQL
-
-`FilterCompiler` принимает только колонки из `filters` манифеста (allowlist) и собирает WHERE:
-
-```text
-defaults.where  AND  user filters  AND  export.extra_where
-```
-
-Пользователь **не может** подставить произвольный SQL — только значения для объявленных фильтров.
-
-### 3.4. Чеклист нового дашборда
-
-1. `sync_dashboard.py --dashboard-id <N> --out manifests/<slug>.yaml`
-2. Поправить лейблы, `defaults`, метрики, bundle.
-3. `curl /dashboards` — новый id виден.
-4. `POST /exports/preview-sql` — SQL похож на View query в Superset.
-5. `DRY_RUN=false` → `POST /exports` → скачать файл, сверить строки с чартом на тех же фильтрах.
-
----
-
-## 4. Инструкция по запуску (Docker)
-
-### Требования
-
-- Docker + Docker Compose
-- Сеть `click_network` и доступные сервисы `clickhouse01`, `superset` (или `superset2`)
-- Файл `export_service/.env` (скопируйте из `.env.example`)
-
-### 4.1. Настройка `.env`
+Swagger → `GET /dashboards` → Execute  
+или:
 
 ```bash
-cp export_service/.env.example export_service/.env
-```
-
-Важные переменные:
-
-| Переменная | Пример в Docker | Назначение |
-|------------|-----------------|------------|
-| `SUPERSET_URL` | `http://superset:8088` | Sync манифестов (`superset2` в af-стеке) |
-| `CLICKHOUSE_HOST` | `clickhouse01` | Выгрузки |
-| `CLICKHOUSE_PORT` | `8123` | HTTP-порт CH |
-| `DRY_RUN` | `false` | `true` — писать файл с SQL без запроса в CH |
-| `EXPORT_SERVICE_PORT` | `8099` | Порт на хосте |
-
-### 4.2. Вариант A — вместе с основным стеком
-
-```bash
-# из корня репозитория
-docker compose -f docker-compose.yml up -d --build export-service
-
-# или af-стек
-docker compose -f docker-compose_af.yml up -d --build export-service
-```
-
-Сервис слушает **8099** на хосте, в сети — `http://export-service:8099`.
-
-### 4.3. Вариант B — только export-service (overlay)
-
-Если стек уже поднят и сеть `click_network` существует:
-
-```bash
-docker compose -f export_service/docker-compose.yml up -d --build
-```
-
-### 4.4. Проверка
-
-```bash
-docker ps --filter name=export-service
-docker logs -f export-service
-
-curl -s http://localhost:8099/health
 curl -s http://localhost:8099/dashboards | python3 -m json.tool
 ```
 
-Swagger: http://localhost:8099/docs
+Должен появиться новый `id` (например `zakupki_as`).
 
-### 4.5. Обновление манифестов без ребилда
+## Шаг 5. Выгрузить
 
-Файлы в `export_service/manifests/` смонтированы в контейнер. Достаточно отредактировать/добавить YAML на хосте — API сразу видит изменения.
+Как в части 2, только подставьте новый id:
 
-Ребилд нужен только при изменении Python-кода / `requirements.txt`:
-
-```bash
-docker compose -f docker-compose.yml up -d --build export-service
+```json
+{
+  "dashboard_id": "zakupki_as",
+  "export_id": "raw",
+  "filters": {
+    "date": { "from": "2026-01-01", "to": "2026-03-31" }
+  }
+}
 ```
 
-### 4.6. Выгрузки на диске
-
-Каталог хоста: `export_service/data/exports/`  
-В контейнере: `/data/exports`
+В Swagger: **`POST /exports`** → затем **`GET /exports/{job_id}/download`**.
 
 ---
 
-## 5. Локальный запуск без Docker
+# Часть 4. Добавить один чарт к уже существующему дашборду
 
-```bash
-cd export_service
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# для отладки SQL без CH:
-# DRY_RUN=true
-# SUPERSET_URL/CLICKHOUSE_* — укажите доступные с вашей машины хосты
+Пример: в «Выбытия АС» уже есть выгрузки, нужно добавить ещё одну «как чарт Топ АС».
 
-uvicorn app.main:app --reload --port 8099
+1. В Superset откройте чарт → меню → **View query** (или Explore → три точки → View query).
+2. Скопируйте смысл запроса: какие колонки в `GROUP BY`, какая метрика (`sum(total_volume)` и т.п.), какие постоянные условия.
+3. В `manifests/vybytiya_as.yaml` в блок `exports:` добавьте:
+
+```yaml
+  - id: top_as
+    label: "Топ АС"
+    mode: aggregate
+    group_by:
+      - owner
+    metrics:
+      - label: "Объем, уп."
+        expr: "sum(`total_volume`)"
+    order_by:
+      - "`Объем, уп.` DESC"
 ```
 
-Sync с хоста:
+4. Если нужен этот чарт в ZIP — добавьте `top_as` в `bundle_tables.include`.
+5. Сохраните файл.
+6. Выгрузка:
 
-```bash
-python scripts/sync_dashboard.py --dashboard-id 16 --out manifests/vybytiya_as.yaml
+```json
+{
+  "dashboard_id": "vybytiya_as",
+  "export_id": "top_as",
+  "filters": {
+    "date": { "from": "2026-01-01", "to": "2026-03-31" }
+  }
+}
 ```
 
 ---
 
-## 6. Структура каталога
+# Часть 5. Краткая шпаргалка
 
+| Задача | Куда идти | Что сделать |
+|--------|-----------|-------------|
+| Запустить сервис | bash | `docker compose -f export_service/docker-compose.yml up -d --build` |
+| Понять фильтры | Superset | Открыть дашборд, запомнить период и значения фильтров |
+| Выгрузить файл | Swagger `/docs` | `POST /exports` → взять `job_id` → `GET /exports/{job_id}/download` |
+| То же без браузера | bash | `curl …/exports` затем `curl -OJ …/download` |
+| Добавить дашборд | bash + YAML | `sync_dashboard.py --dashboard-id N` → поправить YAML → `POST /exports` |
+| Добавить чарт | YAML | Новый блок в `exports:` по View query из Superset |
+
+---
+
+# Часть 6. Если что-то не работает
+
+| Симптом | Что проверить |
+|---------|----------------|
+| `curl: Connection refused` | Контейнер запущен? `docker ps \| grep export` |
+| `status: failed` в ответе `/exports` | `docker logs export-service` — часто нет доступа к ClickHouse или ошибка в SQL манифеста |
+| Дашборда нет в `/dashboards` | Есть ли файл в `export_service/manifests/*.yaml`, поле `id:` без опечатки |
+| Пустой/не тот результат | Сверьте фильтры с дашбордом; проверьте SQL через `POST /exports/preview-sql` |
+| Нужна отладка без ClickHouse | В `.env` поставьте `DRY_RUN=true`, пересоздайте контейнер — в файл запишется SQL |
+
+Пересоздать контейнер после смены `.env`:
+
+```bash
+docker compose -f export_service/docker-compose.yml up -d --force-recreate
 ```
-export_service/
-  Dockerfile
-  docker-compose.yml          # overlay на click_network
-  requirements.txt
-  .env.example
-  README.md
-  manifests/
-    vybytiya_as.yaml          # пример: Выбытия АС
-  data/exports/               # результаты выгрузок (volume)
-  scripts/
-    sync_dashboard.py         # draft YAML из Superset
-  app/
-    main.py                   # FastAPI
-    config.py
-    models.py                 # pydantic-схема манифеста и API
-    registry.py               # загрузка YAML
-    filters.py                # фильтры → WHERE / SQL
-    clickhouse.py             # выполнение в CSV
-    jobs.py                   # jobs + ZIP bundle
-    sync.py                   # генерация draft
-    superset_client.py        # read-only Superset API
-```
-
-В корне репозитория сервис также описан в:
-
-- `docker-compose.yml` → service `export-service`
-- `docker-compose_af.yml` → service `export-service` (по умолчанию `SUPERSET_URL=http://superset2:8088`)

@@ -1,0 +1,228 @@
+id: zakupki_as
+title: Закупки АС
+superset:
+  dashboard_id: 20
+  dashboard_title: Закупки АС
+source:
+  database: clickhouse
+  table: bdm.ac_movement
+  columns:
+  - full_trade_name
+  - quantity
+  - price_without_nds
+  - sip_price
+  - name_of_the_recipient
+  - name_of_the_sender
+  - tin_of_the_recipient
+  - tin_of_the_sender
+  - pack_name
+  - trade_name
+  - owner
+  - the_date_of_the_operation
+  - gtin
+  - name
+  - period
+  - mnn
+  - marketing_group
+column_labels:
+  full_trade_name: Полное торговое наименование
+  quantity: Количество, уп.
+  price_without_nds: Цена прайс-листа
+  sip_price: СИП цена
+  name_of_the_recipient: Наименование получателя
+  name_of_the_sender: Наименование отправителя
+  tin_of_the_recipient: ИНН получателя
+  tin_of_the_sender: ИНН отправителя
+  pack_name: Тип упаковки
+  trade_name: Торговое наименование
+  owner: Владелец АС
+  the_date_of_the_operation: Дата
+  gtin: GTIN
+  name: Бренд
+  period: Период
+  mnn: МНН
+  marketing_group: Маркетинговая группа
+defaults:
+  where: []
+filters:
+- id: the_date_of_the_operation
+  label: Период
+  column: the_date_of_the_operation
+  type: date_range
+  required: false
+  default: relative:current_year
+- id: owner
+  label: Владелец АС
+  column: owner
+  type: multi_select
+  values_from:
+    distinct: owner
+    limit: 2000
+    lazy: false
+- id: name
+  label: Аптечная сеть
+  column: name
+  type: multi_select
+  values_from:
+    distinct: name
+    limit: 2000
+    lazy: false
+- id: tin_of_the_recipient
+  label: ИНН получателя
+  column: tin_of_the_recipient
+  type: multi_select
+  values_from:
+    distinct: tin_of_the_recipient
+    limit: 80
+    lazy: true
+- id: tin_of_the_sender
+  label: ИНН отправителя
+  column: tin_of_the_sender
+  type: multi_select
+  values_from:
+    distinct: tin_of_the_sender
+    limit: 80
+    lazy: true
+- id: name_of_the_sender
+  label: Наименование отправителя
+  column: name_of_the_sender
+  type: multi_select
+  values_from:
+    distinct: name_of_the_sender
+    limit: 80
+    lazy: true
+- id: name_of_the_recipient
+  label: Наименование получателя
+  column: name_of_the_recipient
+  type: multi_select
+  values_from:
+    distinct: name_of_the_recipient
+    limit: 80
+    lazy: true
+- id: gtin
+  label: GTIN
+  column: gtin
+  type: multi_select
+  values_from:
+    distinct: gtin
+    limit: 80
+    lazy: true
+- id: trade_name
+  label: Торговое наименование
+  column: trade_name
+  type: multi_select
+  values_from:
+    distinct: trade_name
+    limit: 2000
+    lazy: false
+- id: full_trade_name
+  label: Полное торговое наименование
+  column: full_trade_name
+  type: multi_select
+  values_from:
+    distinct: full_trade_name
+    limit: 80
+    lazy: true
+- id: marketing_group
+  label: Маркетинговая группа
+  column: marketing_group
+  type: multi_select
+  values_from:
+    distinct: marketing_group
+    limit: 80
+    lazy: true
+exports:
+- id: raw
+  label: Все строки (CSV)
+  mode: raw
+- id: chart_a7f16984_7df7_40ad_b101_c79cee17268f
+  label: Движения
+  mode: aggregate
+  group_by:
+  - owner
+  - tin_of_the_sender
+  - name_of_the_sender
+  - tin_of_the_recipient
+  - name_of_the_recipient
+  - name
+  - mnn
+  - gtin
+  - trade_name
+  - full_trade_name
+  - pack_name
+  metrics:
+  - label: Количество, уп.
+    expr: SUM(`quantity`)
+  order_by:
+  - '`Количество, уп.` DESC'
+- id: chart_7841c1fc_69e1_4b37_86cd_fa5ce5ba48ca
+  label: Получено товара
+  mode: aggregate
+  group_by:
+  - owner
+  - name
+  - tin_of_the_recipient
+  - name_of_the_recipient
+  - full_trade_name
+  metrics:
+  - label: Количество, уп.
+    expr: SUM(`quantity`)
+  - label: Сумма, СИП
+    expr: SUM(sip_price * quantity)
+  - label: Сумма, прайс-лист
+    expr: SUM(price_without_nds*quantity)
+  order_by:
+  - '`Количество, уп.` DESC'
+- id: chart_67eb2295_cfa1_49b2_9d7d_33c7b4ab7ed6
+  label: Топ отправителей
+  mode: aggregate
+  group_by:
+  - tin_of_the_sender
+  - name_of_the_sender
+  metrics:
+  - label: Количество, уп.
+    expr: SUM(`quantity`)
+  - label: Сумма, СИП
+    expr: SUM(sip_price*quantity)
+  - label: Сумма, прайс-лист
+    expr: SUM(price_without_nds*quantity)
+  order_by:
+  - '`Количество, уп.` DESC'
+- id: chart_267e46ec_5d9c_48bc_9979_6ae33c5c486e
+  label: Топ закупленных товаров
+  mode: aggregate
+  group_by:
+  - full_trade_name
+  - gtin
+  metrics:
+  - label: Количество, уп.
+    expr: SUM(`quantity`)
+  - label: Сумма, СИП
+    expr: SUM(sip_price*quantity)
+  - label: Сумма, прайс-лист
+    expr: SUM(price_without_nds*quantity)
+  order_by:
+  - '`Количество, уп.` DESC'
+- id: chart_36fd970d_892d_41b5_ad45_8c24253fccd2
+  label: Цены товаров
+  mode: aggregate
+  group_by:
+  - gtin
+  - full_trade_name
+  metrics:
+  - label: СИП цена
+    expr: AVG(`sip_price`)
+  - label: Цена прайс-листа
+    expr: AVG(`price_without_nds`)
+  order_by:
+  - '`СИП цена` DESC'
+- id: bundle_tables
+  label: Таблицы дашборда (ZIP)
+  mode: bundle
+  include:
+  - raw
+  - chart_a7f16984_7df7_40ad_b101_c79cee17268f
+  - chart_7841c1fc_69e1_4b37_86cd_fa5ce5ba48ca
+  - chart_67eb2295_cfa1_49b2_9d7d_33c7b4ab7ed6
+  - chart_267e46ec_5d9c_48bc_9979_6ae33c5c486e
+  - chart_36fd970d_892d_41b5_ad45_8c24253fccd2

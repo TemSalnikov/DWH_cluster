@@ -1,127 +1,261 @@
-# Manifest for Superset dashboard "Выбытия АС" (id=16)
-# Add new dashboards by copying this file or running:
-#   python -m scripts.sync_dashboard --dashboard-id 16 --out manifests/new.yaml
-
 id: vybytiya_as
-title: "Выбытия АС"
-
+title: Выбытия АС
 superset:
   dashboard_id: 16
-  dashboard_title: "Выбытия АС"
-
+  dashboard_title: Выбытия АС
 source:
   database: clickhouse
   table: bdm.disposal_all_stats_2_ac
-  columns: ["*"]
-
+  columns:
+  - code_of_the_subject_of_the_russian_federation
+  - full_trade_name
+  - the_subject_of_the_russian_federation
+  - name_of_the_participant
+  - tin_of_the_participant
+  - trade_name
+  - name
+  - total_volume
+  - date_of_disposal
+  - gtin
+  - type_of_disposal
+  - address
+  - period
+  - owner
+  - price_without_nds
+  - marketing_group
+  - t1.year_date
+  - month_num
+  - day_month
+column_labels:
+  code_of_the_subject_of_the_russian_federation: Код субъекта РФ
+  full_trade_name: Полное торговое наименование
+  the_subject_of_the_russian_federation: Субъект РФ
+  name_of_the_participant: Наименование организации
+  tin_of_the_participant: ИНН организации
+  trade_name: Торговое наименование
+  name: Бренд АС
+  total_volume: Объем
+  date_of_disposal: Дата
+  gtin: GTIN
+  type_of_disposal: Тип
+  address: Адрес
+  period: Период
+  owner: Владелец
+  marketing_group: Маркетинговая группа
 defaults:
   where:
-    - column: type_of_disposal
-      op: not_in
-      value: ["Остаток"]
-
+  - column: type_of_disposal
+    op: not_in
+    value:
+    - Остаток
 filters:
-  - id: date
-    label: "Период"
-    column: date_of_disposal
-    type: date_range
-    required: false
-    default: "relative:current_year"
-
-  - id: owner
-    label: "Аптечная сеть"
-    column: owner
-    type: multi_select
-    values_from:
-      distinct: owner
-      where: "owner NOT IN ('Не назначено')"
-      limit: 2000
-
-  - id: region
-    label: "Регион"
-    column: the_subject_of_the_russian_federation
-    type: multi_select
-    values_from:
-      distinct: the_subject_of_the_russian_federation
-      limit: 2000
-
-  - id: disposal_type
-    label: "Тип выбытия"
-    column: type_of_disposal
-    type: multi_select
-    values_from:
-      distinct: type_of_disposal
-      limit: 100
-
-  - id: product
-    label: "Продукт"
-    column: trade_name
-    type: multi_select
-    values_from:
-      distinct: trade_name
-      limit: 5000
-
+- id: date_of_disposal
+  label: Дата
+  column: date_of_disposal
+  type: date_range
+  required: false
+  default: relative:current_year
+- id: code_of_the_subject_of_the_russian_federation
+  label: Код субъекта РФ
+  column: code_of_the_subject_of_the_russian_federation
+  type: multi_select
+  values_from:
+    distinct: code_of_the_subject_of_the_russian_federation
+    limit: 2000
+    lazy: false
+- id: the_subject_of_the_russian_federation
+  label: Субъект РФ
+  column: the_subject_of_the_russian_federation
+  type: multi_select
+  values_from:
+    distinct: the_subject_of_the_russian_federation
+    limit: 2000
+    lazy: false
+- id: tin_of_the_participant
+  label: ИНН
+  column: tin_of_the_participant
+  type: multi_select
+  values_from:
+    distinct: tin_of_the_participant
+    limit: 80
+    lazy: true
+- id: name
+  label: Аптечная сеть
+  column: name
+  type: multi_select
+  values_from:
+    distinct: name
+    limit: 2000
+    lazy: false
+- id: trade_name
+  label: Торговое наименование
+  column: trade_name
+  type: multi_select
+  values_from:
+    distinct: trade_name
+    limit: 2000
+    lazy: false
+- id: full_trade_name
+  label: Полное торговое наименование
+  column: full_trade_name
+  type: multi_select
+  values_from:
+    distinct: full_trade_name
+    limit: 80
+    lazy: true
+- id: owner
+  label: Владелец
+  column: owner
+  type: multi_select
+  values_from:
+    distinct: owner
+    limit: 2000
+    lazy: false
+- id: type_of_disposal
+  label: Тип
+  column: type_of_disposal
+  type: multi_select
+  values_from:
+    distinct: type_of_disposal
+    limit: 2000
+    lazy: false
+- id: period
+  label: Период подвязки
+  column: period
+  type: multi_select
+  values_from:
+    distinct: period
+    limit: 2000
+    lazy: false
+- id: gtin
+  label: GTIN
+  column: gtin
+  type: multi_select
+  values_from:
+    distinct: gtin
+    limit: 80
+    lazy: true
+- id: marketing_group
+  label: Маркетинговая группа
+  column: marketing_group
+  type: multi_select
+  values_from:
+    distinct: marketing_group
+    limit: 80
+    lazy: true
 exports:
-  - id: raw
-    label: "Все строки (CSV)"
-    mode: raw
-
-  - id: top_points
-    label: "Топ точек продаж"
-    mode: aggregate
-    group_by:
-      - owner
-      - tin_of_the_participant
-      - name_of_the_participant
-      - address
-    metrics:
-      - label: "Объем, уп."
-        expr: "sum(`total_volume`)"
-      - label: "Объем, прайс-лист"
-        expr: "SUM(`price_without_nds` * `total_volume`)"
-    order_by:
-      - "`Объем, уп.` DESC"
-
-  - id: top_products
-    label: "Топ продуктов"
-    mode: aggregate
-    group_by:
-      - trade_name
-      - full_trade_name
-    metrics:
-      - label: "Объем, уп."
-        expr: "sum(`total_volume`)"
-      - label: "Объем, прайс-лист"
-        expr: "SUM(`price_without_nds` * `total_volume`)"
-    order_by:
-      - "`Объем, уп.` DESC"
-
-  - id: top_regions
-    label: "Топ регионов"
-    mode: aggregate
-    group_by:
-      - code_of_the_subject_of_the_russian_federation
-      - the_subject_of_the_russian_federation
-    metrics:
-      - label: "Объем, уп."
-        expr: "sum(`total_volume`)"
-
-  - id: pivot_svod
-    label: "Выбытия, свод"
-    mode: aggregate
-    group_by:
-      - date_of_disposal
-      - trade_name
-    metrics:
-      - label: "Объем, уп."
-        expr: "sum(`total_volume`)"
-
-  - id: bundle_tables
-    label: "Таблицы дашборда (ZIP)"
-    mode: bundle
-    include:
-      - raw
-      - top_points
-      - top_products
-      - top_regions
-      - pivot_svod
+- id: raw
+  label: Все строки (CSV)
+  mode: raw
+- id: chart_3f3e27e1_9142_4cc8_b8ce_95d1d50c83cc
+  label: Топ продуктов
+  mode: aggregate
+  group_by:
+  - full_trade_name
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  - label: Объем, прайс-лист
+    expr: SUM(price_without_nds*total_volume)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_9c75c29d_82eb_4116_8967_4d2721b178a1
+  label: Топ точек продаж
+  mode: aggregate
+  group_by:
+  - owner
+  - tin_of_the_participant
+  - name_of_the_participant
+  - address
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  - label: Объем, прайс-лист
+    expr: SUM(price_without_nds*total_volume)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_e4f69ba9_f75e_444d_9d9a_a604fe70e865
+  label: Выбытия, свод
+  mode: aggregate
+  group_by:
+  - date_of_disposal
+  - trade_name
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_a22e0dd4_6c5c_4322_b8b7_af558cdcb509
+  label: Топ продуктовых брендов
+  mode: aggregate
+  group_by:
+  - trade_name
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  - label: Объем, прайс лист
+    expr: SUM(price_without_nds*total_volume)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_a99319a0_d875_499d_9192_a8c89b4e15c3
+  label: Топ продуктов в запасе
+  mode: aggregate
+  group_by:
+  - full_trade_name
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  - label: Объем, прайс-лист
+    expr: SUM(price_without_nds*total_volume)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_fde21d0b_81b1_463e_8c6a_acb996b97138
+  label: Топ регионов
+  mode: aggregate
+  group_by:
+  - code_of_the_subject_of_the_russian_federation
+  - the_subject_of_the_russian_federation
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  - label: Объем, прайс-лист
+    expr: SUM(price_without_nds*total_volume)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_2966e40d_dd62_4f36_85c9_99a2bd4ad334
+  label: Топ АС
+  mode: aggregate
+  group_by:
+  - owner
+  - name
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  - label: Объем, прайс-лист
+    expr: SUM(price_without_nds*total_volume)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_42fbed59_b741_450a_8861_4dda2f3c5739
+  label: Выбытия по прайс-листу, свод
+  mode: aggregate
+  group_by:
+  - date_of_disposal
+  - trade_name
+  metrics:
+  - label: Объем, прайс-лист
+    expr: SUM(price_without_nds*total_volume)
+  order_by:
+  - '`Объем, прайс-лист` DESC'
+- id: bundle_tables
+  label: Таблицы дашборда (ZIP)
+  mode: bundle
+  include:
+  - raw
+  - chart_3f3e27e1_9142_4cc8_b8ce_95d1d50c83cc
+  - chart_9c75c29d_82eb_4116_8967_4d2721b178a1
+  - chart_e4f69ba9_f75e_444d_9d9a_a604fe70e865
+  - chart_a22e0dd4_6c5c_4322_b8b7_af558cdcb509
+  - chart_a99319a0_d875_499d_9192_a8c89b4e15c3
+  - chart_fde21d0b_81b1_463e_8c6a_acb996b97138
+  - chart_2966e40d_dd62_4f36_85c9_99a2bd4ad334
+  - chart_42fbed59_b741_450a_8861_4dda2f3c5739

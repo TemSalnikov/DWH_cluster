@@ -1,0 +1,163 @@
+id: otchety_mdlp_detalizatsiya
+title: Отчеты МДЛП (Детализация)
+superset:
+  dashboard_id: 3
+  dashboard_title: Отчеты МДЛП (Детализация)
+source:
+  database: clickhouse
+  table: bdm.week_disposal_dynamics
+  columns:
+  - sum_disposal
+  - weekly_date_of_disposal
+  - the_subject_of_the_russian_federation
+  - name_of_the_participant
+  - tin_of_the_participant
+  - type_of_disposal
+  - trade_name
+column_labels:
+  sum_disposal: Количество, уп.
+  weekly_date_of_disposal: Дата
+  type_of_disposal: Тип выбытия
+  the_subject_of_the_russian_federation: Субъект РФ
+  name_of_the_participant: Организации
+  trade_name: Торговое наименование
+defaults:
+  where: []
+filters:
+- id: type_of_disposal
+  label: Тип выбытия
+  column: type_of_disposal
+  type: multi_select
+  values_from:
+    distinct: type_of_disposal
+    limit: 2000
+    lazy: false
+- id: the_subject_of_the_russian_federation
+  label: Субъект РФ
+  column: the_subject_of_the_russian_federation
+  type: multi_select
+  values_from:
+    distinct: the_subject_of_the_russian_federation
+    limit: 2000
+    lazy: false
+- id: name_of_the_participant
+  label: Организации
+  column: name_of_the_participant
+  type: multi_select
+  values_from:
+    distinct: name_of_the_participant
+    limit: 80
+    lazy: true
+- id: trade_name
+  label: Торговое наименование
+  column: trade_name
+  type: multi_select
+  values_from:
+    distinct: trade_name
+    limit: 2000
+    lazy: false
+- id: weekly_date_of_disposal
+  label: Дата
+  column: weekly_date_of_disposal
+  type: date_range
+  required: false
+  default: relative:current_year
+exports:
+- id: raw
+  label: Все строки (CSV)
+  mode: raw
+- id: chart_de8d61ae_07b1_4caa_a498_da4b20c766b1
+  label: Излишки на год
+  mode: aggregate
+  group_by:
+  - mnn
+  - trade_name
+  - remains
+  - sum_disposal
+  metrics:
+  - label: Избыток на год
+    expr: SUM(`overstock`)
+  order_by:
+  - '`Избыток на год` DESC'
+- id: chart_3223a36f_b62b_49df_8ec8_fbd0b11d53b3
+  label: По сроку годности
+  mode: aggregate
+  group_by:
+  - expired_best_before_date
+  metrics:
+  - label: Остатки на рынке
+    expr: SUM(`remains_in_the_market_units`)
+  order_by:
+  - '`Остатки на рынке` DESC'
+- id: chart_a2cf98b8_23c9_4272_93c8_da6059dde5e6
+  label: Топ ближайших просрочек по продуктам
+  mode: aggregate
+  group_by:
+  - trade_name
+  metrics:
+  - label: Просрочено 1-30 дней
+    expr: SUM(`remains_in_the_market_units`)
+  order_by:
+  - '`Просрочено 1-30 дней` DESC'
+- id: chart_62a19f49_130c_4170_96d3_0c6ecb4d1fde
+  label: Вымывание
+  mode: aggregate
+  group_by:
+  - mnn
+  - trade_name
+  - remains
+  - average_disposal
+  metrics:
+  - label: Прогноз дефицита на ближайшие месяц
+    expr: SUM(`depletion_month`)
+  order_by:
+  - '`Прогноз дефицита на ближайшие месяц` DESC'
+- id: chart_e5c5b510_1048_4855_99d7_efd6a4eb3dc2
+  label: ТОП МНН по утилизации
+  mode: aggregate
+  group_by:
+  - trade_name
+  metrics:
+  - label: SUM(Количество, уп.)
+    expr: SUM(`sum_disposal`)
+  order_by:
+  - '`SUM(Количество, уп.)` DESC'
+- id: chart_f9c1ce29_0293_4ac4_b1f3_a6f8f27bdc7e
+  label: Вымывание
+  mode: aggregate
+  group_by:
+  - code_of_the_subject_of_the_russian_federation
+  - mnn
+  - trade_name
+  - remains
+  - average_disposal
+  metrics:
+  - label: Прогноз дефицита на ближайшие месяц
+    expr: SUM(`depletion_month`)
+  order_by:
+  - '`Прогноз дефицита на ближайшие месяц` DESC'
+- id: chart_d4e9b96f_8cc4_4f36_80a2_0493ca73b5f5
+  label: Остатки по ИНН со сроком 1-30 дней
+  mode: aggregate
+  group_by:
+  - the_subject_of_the_russian_federation
+  - tin_of_the_participant
+  - name_of_the_participant
+  - address
+  metrics:
+  - label: SUM(Остатки на рынке)
+    expr: SUM(`remains_in_the_market_units`)
+  order_by:
+  - '`SUM(Остатки на рынке)` DESC'
+- id: bundle_tables
+  label: Таблицы дашборда (ZIP)
+  mode: bundle
+  include:
+  - raw
+  - chart_de8d61ae_07b1_4caa_a498_da4b20c766b1
+  - chart_3223a36f_b62b_49df_8ec8_fbd0b11d53b3
+  - chart_a2cf98b8_23c9_4272_93c8_da6059dde5e6
+  - chart_62a19f49_130c_4170_96d3_0c6ecb4d1fde
+  - chart_e5c5b510_1048_4855_99d7_efd6a4eb3dc2
+  - chart_f9c1ce29_0293_4ac4_b1f3_a6f8f27bdc7e
+  - chart_d4e9b96f_8cc4_4f36_80a2_0493ca73b5f5

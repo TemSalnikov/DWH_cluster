@@ -27,6 +27,8 @@ class ValuesFrom(BaseModel):
     distinct: str
     where: str | None = None
     limit: int = 2000
+    # Large dimensions (tens of thousands): do not preload; UI searches via API
+    lazy: bool = False
 
 
 class FilterDef(BaseModel):
@@ -77,6 +79,7 @@ class DashboardManifest(BaseModel):
     title: str
     superset: SupersetRef
     source: SourceDef
+    column_labels: dict[str, str] = Field(default_factory=dict)
     defaults: DefaultsDef = Field(default_factory=DefaultsDef)
     filters: list[FilterDef] = Field(default_factory=list)
     exports: list[ExportDef] = Field(default_factory=list)
@@ -98,6 +101,20 @@ class ExportRequest(BaseModel):
     dashboard_id: str
     export_id: str = "raw"
     filters: dict[str, Any] = Field(default_factory=dict)
+
+
+class PreviewRequest(ExportRequest):
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+class ConnectDashboardRequest(BaseModel):
+    """Connect a Superset dashboard by numeric id or by pasting dashboard URL."""
+
+    superset_dashboard_id: int | None = None
+    superset_url: str | None = None
+    manifest_id: str | None = None
+    title: str | None = None
+    overwrite: bool = False
 
 
 class JobStatus(BaseModel):

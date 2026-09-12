@@ -150,10 +150,21 @@ def build_export_sql(
     where_sql = " AND ".join(where_parts) if where_parts else "1"
 
     table = _quote_ident(manifest.source.table)
+    labels = manifest.column_labels or {}
 
     if export.mode == "raw":
         cols = export.columns or manifest.source.columns or ["*"]
-        col_sql = ", ".join(_quote_ident(c) for c in cols)
+        if cols == ["*"] or not cols:
+            col_sql = "*"
+        else:
+            pieces = []
+            for c in cols:
+                alias = labels.get(c, c)
+                if alias != c:
+                    pieces.append(f"{_quote_ident(c)} AS {_quote_ident(alias)}")
+                else:
+                    pieces.append(_quote_ident(c))
+            col_sql = ", ".join(pieces)
         sql = f"SELECT {col_sql}\nFROM {table}\nWHERE {where_sql}"
         if export.safety_cap:
             sql += f"\nLIMIT {int(export.safety_cap)}"
@@ -162,18 +173,24 @@ def build_export_sql(
     if export.mode == "aggregate":
         if not export.group_by or not export.metrics:
             raise FilterCompileError("aggregate export needs group_by and metrics")
+        select_dims = []
+        for c in export.group_by:
+            alias = labels.get(c, c)
+            if alias != c:
+                select_dims.append(f"{_quote_ident(c)} AS {_quote_ident(alias)}")
+            else:
+                select_dims.append(_quote_ident(c))
         group_sql = ", ".join(_quote_ident(c) for c in export.group_by)
         metric_sql = ", ".join(
             f"{m.expr} AS {_quote_ident(m.label)}" for m in export.metrics
         )
         sql = (
-            f"SELECT {group_sql}, {metric_sql}\n"
+            f"SELECT {', '.join(select_dims)}, {metric_sql}\n"
             f"FROM {table}\n"
             f"WHERE {where_sql}\n"
             f"GROUP BY {group_sql}"
         )
         if export.order_by:
-            # order_by entries are trusted labels/exprs from manifest, not user input
             sql += "\nORDER BY " + ", ".join(export.order_by)
         if export.safety_cap:
             sql += f"\nLIMIT {int(export.safety_cap)}"

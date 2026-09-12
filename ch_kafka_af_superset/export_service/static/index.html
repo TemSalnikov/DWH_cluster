@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Выгрузка отчётов</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="top-row top-row-logo">
+        <img class="brand-logo" src="/static/logo.png" alt="Алтайвитамины" width="280" height="57" />
+        <nav class="tabs" aria-label="Разделы">
+          <button type="button" class="tab is-active" data-tab="export" id="tab-export">Выгрузка</button>
+          <button type="button" class="tab" data-tab="connect" id="tab-connect">Добавить отчёт</button>
+        </nav>
+      </div>
+      <div class="top-row top-row-title">
+        <h1>Выгрузка отчётов</h1>
+        <p class="top-help" id="top-help">Выберите отчёт → укажите фильтры → проверьте таблицу → скачайте файл</p>
+      </div>
+    </header>
+
+    <div id="view-export">
+    <nav class="steps" aria-label="Шаги">
+      <button type="button" class="step is-active" data-step="1">
+        <span class="step-num">1</span>
+        <span class="step-label">Отчёт</span>
+      </button>
+      <button type="button" class="step" data-step="2" disabled>
+        <span class="step-num">2</span>
+        <span class="step-label">Фильтры</span>
+      </button>
+      <button type="button" class="step" data-step="3" disabled>
+        <span class="step-num">3</span>
+        <span class="step-label">Что скачать</span>
+      </button>
+      <button type="button" class="step" data-step="4" disabled>
+        <span class="step-num">4</span>
+        <span class="step-label">Превью и файл</span>
+      </button>
+    </nav>
+
+    <main>
+      <!-- Step 1 -->
+      <section class="panel is-visible" id="step-1" aria-labelledby="h-step-1">
+        <div class="panel-head">
+          <h2 id="h-step-1">Какой отчёт выгрузить?</h2>
+          <p>Нажмите на нужный отчёт. Это те же дашборды, что в Superset.</p>
+        </div>
+        <div id="dashboard-grid" class="dash-grid" role="listbox" aria-label="Список отчётов">
+          <div class="skeleton-grid" aria-hidden="true">
+            <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+          </div>
+        </div>
+        <p id="dashboards-error" class="error" hidden></p>
+      </section>
+
+      <!-- Step 2 -->
+      <section class="panel" id="step-2" aria-labelledby="h-step-2" hidden>
+        <div class="panel-head">
+          <h2 id="h-step-2">Укажите условия</h2>
+          <p>Оставьте пустым, если ограничение не нужно. Период по умолчанию — текущий год.</p>
+        </div>
+        <div class="selected-banner" id="selected-banner-2"></div>
+        <div id="filters-root" class="filters"></div>
+        <div class="actions">
+          <button type="button" class="btn btn-ghost" data-go="1">Назад</button>
+          <button type="button" class="btn btn-primary" data-go="3">Далее: что скачать</button>
+        </div>
+      </section>
+
+      <!-- Step 3 -->
+      <section class="panel" id="step-3" aria-labelledby="h-step-3" hidden>
+        <div class="panel-head">
+          <h2 id="h-step-3">Что именно скачать?</h2>
+          <p>«Все строки» — полный набор данных. Остальные варианты — готовые сводки как на отчёте.</p>
+        </div>
+        <div class="selected-banner" id="selected-banner-3"></div>
+        <div id="exports-root" class="export-list" role="radiogroup" aria-label="Тип файла"></div>
+        <div class="actions">
+          <button type="button" class="btn btn-ghost" data-go="2">Назад</button>
+          <button type="button" class="btn btn-primary" id="btn-to-preview">Далее: показать данные</button>
+        </div>
+      </section>
+
+      <!-- Step 4 -->
+      <section class="panel" id="step-4" aria-labelledby="h-step-4" hidden>
+        <div class="panel-head row">
+          <div>
+            <h2 id="h-step-4">Проверьте данные и скачайте</h2>
+            <p>Ниже — образец (до 100 строк). Если всё верно — нажмите большую кнопку скачивания.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" id="btn-refresh-preview">Обновить превью</button>
+        </div>
+
+        <div class="summary" id="summary"></div>
+        <p id="preview-note" class="note" hidden></p>
+        <p id="preview-error" class="error" hidden></p>
+
+        <div class="preview-wrap">
+          <div id="preview-meta" class="preview-meta"></div>
+          <div class="table-scroll" id="preview-table-wrap">
+            <div class="preview-placeholder" id="preview-placeholder">
+              Нажмите «Показать данные» или «Обновить превью»
+            </div>
+          </div>
+        </div>
+
+        <div class="download-bar">
+          <div>
+            <strong id="download-title">Полная выгрузка</strong>
+            <p id="download-hint">Будет сформирован файл со всеми строками по выбранным фильтрам — без лимита 100&nbsp;000.</p>
+          </div>
+          <button type="button" class="btn btn-download" id="btn-download" disabled>
+            Скачать полный файл
+          </button>
+        </div>
+        <p id="download-status" class="status" hidden></p>
+
+        <div class="actions">
+          <button type="button" class="btn btn-ghost" data-go="3">Назад</button>
+          <button type="button" class="btn btn-ghost" data-go="1">Выбрать другой отчёт</button>
+        </div>
+      </section>
+    </main>
+    </div>
+
+    <div id="view-connect" hidden>
+      <section class="panel" aria-labelledby="h-connect">
+        <div class="panel-head">
+          <h2 id="h-connect">Подключить дашборд из Superset</h2>
+          <p>Укажите номер дашборда или вставьте ссылку из браузера. Сервис сам создаст карточку отчёта для выгрузки.</p>
+        </div>
+
+        <div class="connect-guide">
+          <ol>
+            <li>Откройте нужный дашборд в Superset.</li>
+            <li>Скопируйте адрес из строки браузера (или только число из адреса, например <code>20</code>).</li>
+            <li>Вставьте сюда и нажмите «Подключить отчёт».</li>
+          </ol>
+          <p class="connect-example">Пример ссылки: <code>http://192.168.14.226:8088/superset/dashboard/20/</code></p>
+        </div>
+
+        <form id="connect-form" class="connect-form" autocomplete="off">
+          <label class="field">
+            <span>Ссылка или номер дашборда</span>
+            <input id="connect-url" type="text" required placeholder="20  или  …/dashboard/20/" />
+          </label>
+          <label class="field">
+            <span>Название в списке выгрузки (необязательно)</span>
+            <input id="connect-title" type="text" placeholder="Оставьте пустым — возьмём из Superset" />
+          </label>
+          <label class="check">
+            <input id="connect-overwrite" type="checkbox" />
+            <span>Заменить, если такой отчёт уже подключён</span>
+          </label>
+          <div class="actions" style="border:0;padding-top:0;margin-top:0.5rem">
+            <button type="submit" class="btn btn-primary" id="btn-connect">Подключить отчёт</button>
+          </div>
+        </form>
+
+        <p id="connect-status" class="status" hidden></p>
+        <p id="connect-error" class="error" hidden></p>
+        <div id="connect-result" class="connect-result" hidden></div>
+      </section>
+    </div>
+
+    <footer class="foot">
+      <span>Технический API и Swagger — <a href="/docs">/docs</a></span>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast" hidden role="status"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

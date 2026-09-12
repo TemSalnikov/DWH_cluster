@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import io
+import zipfile
 from typing import Any
 
 import httpx
+import yaml
 
 from .config import settings
 
@@ -50,6 +53,48 @@ class SupersetClient:
             )
             resp.raise_for_status()
             return resp.json()
+
+    def get_bytes(self, path: str, params: dict[str, Any] | None = None) -> bytes:
+        with httpx.Client(timeout=120.0) as client:
+            resp = client.get(
+                f"{self.base_url}{path}",
+                headers=self._headers(),
+                params=params,
+            )
+            resp.raise_for_status()
+            return resp.content
+
+    def export_dashboard_bundle(self, dashboard_id: int) -> dict[str, Any]:
+        """
+        Download dashboard export ZIP and parse dashboard/datasets/charts YAML.
+        Endpoint works with JWT even when GET /dashboard/{id} returns 404.
+        """
+        raw = self.get_bytes(
+            "/api/v1/dashboard/export/",
+            params={"q": f"!({dashboard_id})"},
+        )
+        dashboards: list[dict[str, Any]] = []
+        datasets: list[dict[str, Any]] = []
+        charts: list[dict[str, Any]] = []
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            for name in zf.namelist():
+                if not name.endswith((".yaml", ".yml")):
+                    continue
+                data = yaml.safe_load(zf.read(name)) or {}
+                low = name.lower()
+                if "/dashboards/" in low:
+                    dashboards.append(data)
+                elif "/datasets/" in low:
+                    datasets.append(data)
+                elif "/charts/" in low:
+                    charts.append(data)
+        if not dashboards:
+            raise RuntimeError(f"В export ZIP нет дашборда id={dashboard_id}")
+        return {
+            "dashboard": dashboards[0],
+            "datasets": datasets,
+            "charts": charts,
+        }
 
     def list_charts_for_dashboard(self, dashboard_id: int) -> list[dict[str, Any]]:
         """Dashboard list/detail may 404 for JWT; recover via chart.dashboards."""

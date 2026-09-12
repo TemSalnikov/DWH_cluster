@@ -1,0 +1,304 @@
+id: mdlp_ostatki
+title: МДЛП | Остатки
+superset:
+  dashboard_id: 27
+  dashboard_title: МДЛП | Остатки
+source:
+  database: clickhouse
+  table: bdm.pharma_stock
+  columns:
+  - marketing_group
+  - code_of_the_subject_of_the_russian_federation
+  - the_subject_of_the_russian_federation
+  - name_of_the_participant
+  - full_trade_name
+  - name_ac
+  - total_volume
+  - sku_type
+  - category
+  - typa_participant
+  - trade_name
+  - expiry_status
+  - date_of_disposal
+  - gtin
+  - tin_of_the_participant
+  - address
+  - owner
+  - type_of_disposal
+  - iso_code
+column_labels:
+  marketing_group: Маркетинговая группа SKU
+  code_of_the_subject_of_the_russian_federation: Код субъекта РФ
+  the_subject_of_the_russian_federation: Наименование субъекта РФ
+  name_of_the_participant: Наименование организации МДЛП
+  full_trade_name: Полное торговое наименование
+  name_ac: Внутреннее наименование организации
+  total_volume: Объем, уп.
+  sku_type: Тип SKU
+  category: Категория SKU
+  typa_participant: Тип организации
+  trade_name: Торговое наименование
+  expiry_status: Группа просрочки
+  date_of_disposal: Дата
+  gtin: GTIN
+  tin_of_the_participant: ИНН
+  address: Адрес
+  owner: Владелец
+defaults:
+  where: []
+filters:
+- id: date_of_disposal
+  label: Дата
+  column: date_of_disposal
+  type: date_range
+  required: false
+  default: relative:current_year
+- id: the_subject_of_the_russian_federation
+  label: Наименование субъекта РФ
+  column: the_subject_of_the_russian_federation
+  type: multi_select
+  values_from:
+    distinct: the_subject_of_the_russian_federation
+    limit: 2000
+    lazy: false
+- id: name_ac
+  label: Внутреннее наименование организации
+  column: name_ac
+  type: multi_select
+  values_from:
+    distinct: name_ac
+    limit: 2000
+    lazy: false
+- id: tin_of_the_participant
+  label: ИНН
+  column: tin_of_the_participant
+  type: multi_select
+  values_from:
+    distinct: tin_of_the_participant
+    limit: 80
+    lazy: true
+- id: owner
+  label: Владелец АС
+  column: owner
+  type: multi_select
+  values_from:
+    distinct: owner
+    limit: 2000
+    lazy: false
+- id: typa_participant
+  label: Тип организации
+  column: typa_participant
+  type: multi_select
+  values_from:
+    distinct: typa_participant
+    limit: 80
+    lazy: true
+- id: marketing_group
+  label: Маркетинговая группа SKU
+  column: marketing_group
+  type: multi_select
+  values_from:
+    distinct: marketing_group
+    limit: 80
+    lazy: true
+- id: category
+  label: Категория SKU
+  column: category
+  type: multi_select
+  values_from:
+    distinct: category
+    limit: 2000
+    lazy: false
+- id: sku_type
+  label: Тип SKU
+  column: sku_type
+  type: multi_select
+  values_from:
+    distinct: sku_type
+    limit: 2000
+    lazy: false
+- id: full_trade_name
+  label: Полное торговое наименование
+  column: full_trade_name
+  type: multi_select
+  values_from:
+    distinct: full_trade_name
+    limit: 80
+    lazy: true
+- id: gtin
+  label: GTIN
+  column: gtin
+  type: multi_select
+  values_from:
+    distinct: gtin
+    limit: 80
+    lazy: true
+- id: name_of_the_participant
+  label: Наименование организации МДЛП
+  column: name_of_the_participant
+  type: multi_select
+  values_from:
+    distinct: name_of_the_participant
+    limit: 80
+    lazy: true
+exports:
+- id: raw
+  label: Все строки (CSV)
+  mode: raw
+- id: chart_163a218d_77ff_4dfa_86d6_f60f8882b698
+  label: Топ организаций
+  mode: aggregate
+  group_by:
+  - tin_of_the_participant
+  - name_ac
+  - name_of_the_participant
+  - typa_participant
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_b2c3e200_13a2_4619_9946_695dc222809d
+  label: Сводная таблица остатков
+  mode: aggregate
+  group_by:
+  - date_of_disposal
+  - gtin
+  - full_trade_name
+  metrics:
+  - label: Остатки, тыс. уп. (Округлено)
+    expr: ROUND(SUM(total_volume) / 1000,0)
+  order_by:
+  - '`Остатки, тыс. уп. (Округлено)` DESC'
+- id: chart_b30eba0f_a191_4c9b_a473_c3ebf8aef5da
+  label: По SKU | < 1 мес
+  mode: aggregate
+  group_by:
+  - gtin
+  - full_trade_name
+  - marketing_group
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_b527772a_9061_46d3_902e_a88d1523a3c3
+  label: По ЮЛ | Просрочено
+  mode: aggregate
+  group_by:
+  - tin_of_the_participant
+  - name_of_the_participant
+  - name_ac
+  - typa_participant
+  - address
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_e589862a_5331_4df3_b06f_7db36663a303
+  label: По SKU | < 3 мес
+  mode: aggregate
+  group_by:
+  - gtin
+  - full_trade_name
+  - marketing_group
+  metrics:
+  - label: SUM(Объем, уп.)
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`SUM(Объем, уп.)` DESC'
+- id: chart_cc6a5944_1412_4055_a9bb_c23ad59a3cbd
+  label: Остатки по GTIN
+  mode: aggregate
+  group_by:
+  - gtin
+  - trade_name
+  - full_trade_name
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_5a5c4c1e_f231_4d0c_a867_2d764e945b2b
+  label: По дистрибьюторам
+  mode: aggregate
+  group_by:
+  - tin_of_the_participant
+  - name_ac
+  metrics:
+  - label: SUM(Объем, уп.)
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`SUM(Объем, уп.)` DESC'
+- id: chart_f41a4c90_91e1_4547_b7f3_5cbc422192b8
+  label: По АС
+  mode: raw
+- id: chart_84270a5b_d608_4d71_a835_2e34abf41784
+  label: По ЮЛ | < 3 мес
+  mode: aggregate
+  group_by:
+  - tin_of_the_participant
+  - name_of_the_participant
+  - name_ac
+  - typa_participant
+  - address
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_09901265_5201_4968_b797_f724413c485d
+  label: По SKU| Просрочено
+  mode: aggregate
+  group_by:
+  - gtin
+  - full_trade_name
+  - marketing_group
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_0c15d627_8958_4725_a80a_7a136300757c
+  label: Топ регионов
+  mode: aggregate
+  group_by:
+  - code_of_the_subject_of_the_russian_federation
+  - the_subject_of_the_russian_federation
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: chart_7dd1c095_345a_4b9d_9454_e0251af53f47
+  label: По ЮЛ | < 1 мес
+  mode: aggregate
+  group_by:
+  - tin_of_the_participant
+  - name_of_the_participant
+  - name_ac
+  - typa_participant
+  - address
+  metrics:
+  - label: Объем, уп.
+    expr: SUM(`total_volume`)
+  order_by:
+  - '`Объем, уп.` DESC'
+- id: bundle_tables
+  label: Таблицы дашборда (ZIP)
+  mode: bundle
+  include:
+  - raw
+  - chart_163a218d_77ff_4dfa_86d6_f60f8882b698
+  - chart_b2c3e200_13a2_4619_9946_695dc222809d
+  - chart_b30eba0f_a191_4c9b_a473_c3ebf8aef5da
+  - chart_b527772a_9061_46d3_902e_a88d1523a3c3
+  - chart_e589862a_5331_4df3_b06f_7db36663a303
+  - chart_cc6a5944_1412_4055_a9bb_c23ad59a3cbd
+  - chart_5a5c4c1e_f231_4d0c_a867_2d764e945b2b
+  - chart_f41a4c90_91e1_4547_b7f3_5cbc422192b8
+  - chart_84270a5b_d608_4d71_a835_2e34abf41784
+  - chart_09901265_5201_4968_b797_f724413c485d
+  - chart_0c15d627_8958_4725_a80a_7a136300757c
+  - chart_7dd1c095_345a_4b9d_9454_e0251af53f47
