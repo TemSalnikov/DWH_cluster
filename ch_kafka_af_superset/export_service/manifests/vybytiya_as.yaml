@@ -1,0 +1,127 @@
+# Manifest for Superset dashboard "Выбытия АС" (id=16)
+# Add new dashboards by copying this file or running:
+#   python -m scripts.sync_dashboard --dashboard-id 16 --out manifests/new.yaml
+
+id: vybytiya_as
+title: "Выбытия АС"
+
+superset:
+  dashboard_id: 16
+  dashboard_title: "Выбытия АС"
+
+source:
+  database: clickhouse
+  table: bdm.disposal_all_stats_2_ac
+  columns: ["*"]
+
+defaults:
+  where:
+    - column: type_of_disposal
+      op: not_in
+      value: ["Остаток"]
+
+filters:
+  - id: date
+    label: "Период"
+    column: date_of_disposal
+    type: date_range
+    required: false
+    default: "relative:current_year"
+
+  - id: owner
+    label: "Аптечная сеть"
+    column: owner
+    type: multi_select
+    values_from:
+      distinct: owner
+      where: "owner NOT IN ('Не назначено')"
+      limit: 2000
+
+  - id: region
+    label: "Регион"
+    column: the_subject_of_the_russian_federation
+    type: multi_select
+    values_from:
+      distinct: the_subject_of_the_russian_federation
+      limit: 2000
+
+  - id: disposal_type
+    label: "Тип выбытия"
+    column: type_of_disposal
+    type: multi_select
+    values_from:
+      distinct: type_of_disposal
+      limit: 100
+
+  - id: product
+    label: "Продукт"
+    column: trade_name
+    type: multi_select
+    values_from:
+      distinct: trade_name
+      limit: 5000
+
+exports:
+  - id: raw
+    label: "Все строки (CSV)"
+    mode: raw
+
+  - id: top_points
+    label: "Топ точек продаж"
+    mode: aggregate
+    group_by:
+      - owner
+      - tin_of_the_participant
+      - name_of_the_participant
+      - address
+    metrics:
+      - label: "Объем, уп."
+        expr: "sum(`total_volume`)"
+      - label: "Объем, прайс-лист"
+        expr: "SUM(`price_without_nds` * `total_volume`)"
+    order_by:
+      - "`Объем, уп.` DESC"
+
+  - id: top_products
+    label: "Топ продуктов"
+    mode: aggregate
+    group_by:
+      - trade_name
+      - full_trade_name
+    metrics:
+      - label: "Объем, уп."
+        expr: "sum(`total_volume`)"
+      - label: "Объем, прайс-лист"
+        expr: "SUM(`price_without_nds` * `total_volume`)"
+    order_by:
+      - "`Объем, уп.` DESC"
+
+  - id: top_regions
+    label: "Топ регионов"
+    mode: aggregate
+    group_by:
+      - code_of_the_subject_of_the_russian_federation
+      - the_subject_of_the_russian_federation
+    metrics:
+      - label: "Объем, уп."
+        expr: "sum(`total_volume`)"
+
+  - id: pivot_svod
+    label: "Выбытия, свод"
+    mode: aggregate
+    group_by:
+      - date_of_disposal
+      - trade_name
+    metrics:
+      - label: "Объем, уп."
+        expr: "sum(`total_volume`)"
+
+  - id: bundle_tables
+    label: "Таблицы дашборда (ZIP)"
+    mode: bundle
+    include:
+      - raw
+      - top_points
+      - top_products
+      - top_regions
+      - pivot_svod

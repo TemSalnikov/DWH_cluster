@@ -1,0 +1,35 @@
+# Standalone / overlay: подключается к внешней сети click_network
+# Запуск из корня репо:
+#   docker compose -f export_service/docker-compose.yml up -d --build
+#
+# Или вместе с основным стеком (сервис также добавлен в docker-compose.yml / docker-compose_af.yml).
+
+services:
+  export-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dwh-export-service:local
+    hostname: export-service
+    container_name: export-service
+    restart: always
+    ports:
+      - "${EXPORT_SERVICE_PORT:-8099}:8099"
+    env_file:
+      - .env
+    environment:
+      SUPERSET_URL: ${SUPERSET_URL:-http://superset:8088}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse01}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
+      MANIFESTS_DIR: /app/manifests
+      EXPORT_DIR: /data/exports
+      DRY_RUN: ${DRY_RUN:-false}
+    volumes:
+      - ./manifests:/app/manifests:ro
+      - ./data/exports:/data/exports
+    networks:
+      - click_network
+
+networks:
+  click_network:
+    external: true

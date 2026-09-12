@@ -435,3 +435,29 @@ services:
     networks:
       click_network: {}
 
+  export-service:
+    build:
+      context: ./export_service
+      dockerfile: Dockerfile
+    image: dwh-export-service:local
+    hostname: export-service
+    container_name: export-service
+    restart: always
+    ports:
+      - "${EXPORT_SERVICE_PORT:-8099}:8099"
+    env_file:
+      - ./export_service/.env
+    environment:
+      # в af-стеке контейнер может называться superset2 — переопределите SUPERSET_URL в .env
+      SUPERSET_URL: ${SUPERSET_URL:-http://superset2:8088}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse01}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
+      MANIFESTS_DIR: /app/manifests
+      EXPORT_DIR: /data/exports
+      DRY_RUN: ${DRY_RUN:-false}
+    volumes:
+      - ./export_service/manifests:/app/manifests:ro
+      - ./export_service/data/exports:/data/exports
+    networks:
+      click_network: {}
+
